@@ -74,7 +74,7 @@ heroku config:set ADMIN_PASSWORD=your-password
 heroku config:set SWAGGER_ENABLED=false
 
 # Deploy
-git push heroku main
+git push heroku master
 ```
 
 ### Railway

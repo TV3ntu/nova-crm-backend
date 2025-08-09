@@ -22,7 +22,7 @@ Ensure these files are in your repository:
    ```bash
    git add .
    git commit -m "Add Render Docker deployment configuration"
-   git push origin main
+   git push origin master
    ```
 
 2. **Connect to Render:**
@@ -147,11 +147,11 @@ After successful deployment:
 
 ## 🔄 **Continuous Deployment**
 
-Render automatically rebuilds and deploys when you push to your main branch:
+Render automatically rebuilds and deploys when you push to your master branch:
 ```bash
 git add .
 git commit -m "Update application"
-git push origin main
+git push origin master
 # Render will automatically build Docker image and deploy
 ```
 

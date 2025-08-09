@@ -1,0 +1,28 @@
+# Render ignore file - similar to .dockerignore but for Render builds
+.git/
+.gitignore
+*.md
+docs/
+README.md
+DEPLOYMENT.md
+RENDER_DEPLOYMENT.md
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files (we skip tests in build)
+src/test/
+
+# Temporary files
+tmp/
+temp/
