@@ -4,7 +4,7 @@ services:
     env: docker
     plan: free
     region: oregon
-    branch: main
+    branch: master
     healthCheckPath: /api/auth/login
     envVars:
       - key: SPRING_PROFILES_ACTIVE
