@@ -1,9 +1,7 @@
 services:
   - type: web
     name: nova-crm
-    env: java
-    buildCommand: ./gradlew build -x test
-    startCommand: java -Dserver.port=$PORT -jar build/libs/nova-crm-*.jar --spring.profiles.active=prod
+    env: docker
     plan: free
     region: oregon
     branch: main
@@ -21,8 +19,6 @@ services:
         value: false
       - key: API_DOCS_ENABLED
         value: false
-      - key: JAVA_OPTS
-        value: -Xmx512m -Xms256m
 
 databases:
   - name: nova-crm-db
