@@ -1,0 +1,235 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "NOVA Dance Studio CRM API",
+    "description": "Comprehensive CRM system for NOVA dance studio",
+    "version": "1.0.0"
+  },
+  "servers": [{"url": "http://localhost:8080"}],
+  "security": [{"bearerAuth": []}],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Admin login - get JWT token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": {"type": "string", "example": "admin"},
+                  "password": {"type": "string", "example": "nova2024"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {"type": "string"},
+                    "tokenType": {"type": "string", "example": "Bearer"},
+                    "username": {"type": "string"},
+                    "expiresIn": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/students": {
+      "get": {
+        "tags": ["Students"],
+        "summary": "Get all students",
+        "responses": {
+          "200": {
+            "description": "List of students",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Student"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Students"],
+        "summary": "Create new student",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/CreateStudent"}
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Student created"}
+        }
+      }
+    },
+    "/api/students/{id}": {
+      "get": {"tags": ["Students"], "summary": "Get student by ID"},
+      "put": {"tags": ["Students"], "summary": "Update student"},
+      "delete": {"tags": ["Students"], "summary": "Delete student"}
+    },
+    "/api/students/{studentId}/enroll/{classId}": {
+      "post": {"tags": ["Students"], "summary": "Enroll student in class"}
+    },
+    "/api/teachers": {
+      "get": {"tags": ["Teachers"], "summary": "Get all teachers"},
+      "post": {"tags": ["Teachers"], "summary": "Create new teacher"}
+    },
+    "/api/teachers/{id}": {
+      "get": {"tags": ["Teachers"], "summary": "Get teacher by ID"},
+      "put": {"tags": ["Teachers"], "summary": "Update teacher"},
+      "delete": {"tags": ["Teachers"], "summary": "Delete teacher"}
+    },
+    "/api/classes": {
+      "get": {"tags": ["Classes"], "summary": "Get all dance classes"},
+      "post": {"tags": ["Classes"], "summary": "Create new dance class"}
+    },
+    "/api/classes/{id}": {
+      "get": {"tags": ["Classes"], "summary": "Get class by ID"},
+      "put": {"tags": ["Classes"], "summary": "Update class"},
+      "delete": {"tags": ["Classes"], "summary": "Delete class"}
+    },
+    "/api/payments": {
+      "get": {"tags": ["Payments"], "summary": "Get all payments"},
+      "post": {"tags": ["Payments"], "summary": "Process single payment"}
+    },
+    "/api/payments/multi-class": {
+      "post": {"tags": ["Payments"], "summary": "Process multi-class payment"}
+    },
+    "/api/reports/teacher-compensation": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Teacher compensation report",
+        "parameters": [
+          {"name": "year", "in": "query", "required": true, "schema": {"type": "integer"}},
+          {"name": "month", "in": "query", "required": true, "schema": {"type": "integer"}}
+        ]
+      }
+    },
+    "/api/reports/outstanding-payments": {
+      "get": {"tags": ["Reports"], "summary": "Outstanding payments report"}
+    },
+    "/api/reports/financial": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Financial summary report",
+        "parameters": [
+          {"name": "year", "in": "query", "required": true, "schema": {"type": "integer"}},
+          {"name": "month", "in": "query", "required": true, "schema": {"type": "integer"}}
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Student": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "firstName": {"type": "string"},
+          "lastName": {"type": "string"},
+          "phone": {"type": "string"},
+          "email": {"type": "string"},
+          "address": {"type": "string"},
+          "birthDate": {"type": "string", "format": "date"}
+        }
+      },
+      "CreateStudent": {
+        "type": "object",
+        "required": ["firstName", "lastName", "phone"],
+        "properties": {
+          "firstName": {"type": "string"},
+          "lastName": {"type": "string"},
+          "phone": {"type": "string"},
+          "email": {"type": "string"},
+          "address": {"type": "string"},
+          "birthDate": {"type": "string", "format": "date"}
+        }
+      },
+      "Teacher": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "firstName": {"type": "string"},
+          "lastName": {"type": "string"},
+          "phone": {"type": "string"},
+          "email": {"type": "string"},
+          "address": {"type": "string"},
+          "isStudioOwner": {"type": "boolean", "description": "Studio owners get 100% revenue, others get 50%"}
+        }
+      },
+      "DanceClass": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "type": {"type": "string"},
+          "description": {"type": "string"},
+          "price": {"type": "number", "description": "Monthly price"},
+          "durationMinutes": {"type": "integer"},
+          "schedules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "dayOfWeek": {"type": "string", "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]},
+                "startTime": {"type": "string", "format": "time"},
+                "endTime": {"type": "string", "format": "time"}
+              }
+            }
+          }
+        }
+      },
+      "Payment": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "studentId": {"type": "integer"},
+          "classId": {"type": "integer"},
+          "amount": {"type": "number"},
+          "paymentDate": {"type": "string", "format": "date"},
+          "month": {"type": "string", "description": "Payment month in YYYY-MM format"},
+          "isLatePayment": {"type": "boolean", "description": "True if paid after 10th of month (15% penalty applied)"}
+        }
+      },
+      "MultiClassPayment": {
+        "type": "object",
+        "required": ["studentId", "classIds", "totalAmount", "month"],
+        "properties": {
+          "studentId": {"type": "integer"},
+          "classIds": {"type": "array", "items": {"type": "integer"}},
+          "totalAmount": {"type": "number"},
+          "month": {"type": "string", "description": "Payment month in YYYY-MM format"},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token obtained from /api/auth/login"
+      }
+    }
+  }
+}

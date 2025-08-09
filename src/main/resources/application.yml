@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: nova-crm
+  
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
+
+# JWT Configuration
+jwt:
+  secret: "nova-crm-secret-key-for-jwt-token-generation-2024"
+  expiration: 86400000 # 24 hours in milliseconds
+
+# Admin User Configuration
+admin:
+  username: admin
+  password: nova2024
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
+  info:
+    title: NOVA Dance Studio CRM API
+    description: Comprehensive CRM system for managing dance studio operations
+    version: 1.0.0
+
+logging:
+  level:
+    com.nova: DEBUG
+    org.springframework.web: DEBUG
