@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: nova-crm
+    env: java
+    buildCommand: ./gradlew build -x test
+    startCommand: java -Dserver.port=$PORT -jar build/libs/nova-crm-*.jar --spring.profiles.active=prod
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /api/auth/login
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: SWAGGER_ENABLED
+        value: false
+      - key: API_DOCS_ENABLED
+        value: false
+      - key: JAVA_OPTS
+        value: -Xmx512m -Xms256m
+
+databases:
+  - name: nova-crm-db
+    databaseName: nova_crm
+    user: nova_user
+    plan: free
+    region: oregon
