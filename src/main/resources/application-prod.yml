@@ -1,9 +1,7 @@
 spring:
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/nova_crm}
+    url: ${DATABASE_URL}
     driver-class-name: org.postgresql.Driver
-    username: ${DATABASE_USERNAME:nova_user}
-    password: ${DATABASE_PASSWORD:nova_password}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
