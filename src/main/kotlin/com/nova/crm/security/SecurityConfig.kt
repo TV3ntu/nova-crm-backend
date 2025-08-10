@@ -56,21 +56,27 @@ class SecurityConfig {
                     .requestMatchers("/h2-console/**").permitAll()
                     // Health check endpoints
                     .requestMatchers("/", "/health", "/api/health").permitAll()
-                    // Swagger/OpenAPI documentation endpoints
+                    // Swagger/OpenAPI documentation endpoints (comprehensive patterns)
                     .requestMatchers("/swagger-ui/**").permitAll()
                     .requestMatchers("/swagger-ui.html").permitAll()
+                    .requestMatchers("/swagger-ui/index.html").permitAll()
                     .requestMatchers("/v3/api-docs/**").permitAll()
                     .requestMatchers("/v3/api-docs").permitAll()
+                    .requestMatchers("/v3/api-docs.yaml").permitAll()
                     .requestMatchers("/swagger-resources/**").permitAll()
                     .requestMatchers("/webjars/**").permitAll()
+                    .requestMatchers("/configuration/**").permitAll()
+                    .requestMatchers("/swagger-config").permitAll()
                     // All other endpoints require authentication
                     .anyRequest().authenticated()
             }
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter::class.java)
 
-        // Allow H2 console to work properly
+        // Allow H2 console and Swagger to work properly
         http.headers { headers ->
             headers.frameOptions { it.sameOrigin() }
+            headers.contentTypeOptions { it.disable() }
+            headers.httpStrictTransportSecurity { it.disable() }
         }
 
         return http.build()
