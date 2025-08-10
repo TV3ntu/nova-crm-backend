@@ -17,9 +17,9 @@ import java.time.YearMonth
 class DashboardController(
     private val studentService: StudentService,
     private val teacherService: TeacherService,
-    private val classService: ClassService,
+    private val danceClassService: DanceClassService,
     private val paymentService: PaymentService,
-    private val reportService: ReportService
+    private val reportingService: ReportingService
 ) {
 
     @GetMapping
@@ -30,26 +30,23 @@ class DashboardController(
     @ApiResponse(responseCode = "200", description = "Dashboard metrics retrieved successfully")
     fun getDashboardMetrics(): Map<String, Any> {
         val currentMonth = YearMonth.now()
-        val today = LocalDate.now()
         
         // Basic counts
         val totalStudents = studentService.findAll().size
         val totalTeachers = teacherService.findAll().size
-        val totalClasses = classService.findAll().size
+        val totalClasses = danceClassService.findAll().size
         
         // Monthly payments
-        val monthlyPayments = paymentService.findByMonth(currentMonth.toString())
-        val monthlyRevenue = monthlyPayments.sumOf { it.totalAmount }
+        val monthlyPayments = paymentService.findByMonth(currentMonth)
+        val monthlyRevenue = monthlyPayments.sumOf { it.amount }
         
-        // Outstanding payments
-        val outstandingPayments = reportService.getOutstandingPayments()
-        val outstandingAmount = outstandingPayments.sumOf { 
-            val payment = it["payment"] as Map<String, Any>
-            (payment["totalAmount"] as Number).toDouble()
-        }
+        // Outstanding payments using ReportingService
+        val outstandingReport = reportingService.generateOutstandingPaymentsReport(currentMonth)
+        val outstandingPayments = outstandingReport.outstandingPayments.values.flatten()
+        val outstandingAmount = outstandingReport.totalOutstandingAmount
         
-        // Classes today (simplified - you might want to add day-of-week logic)
-        val classesToday = classService.findAll().size // Simplified
+        // Classes today (simplified)
+        val classesToday = totalClasses // Simplified for now
         
         // Recent activity (last 5 payments)
         val recentPayments = paymentService.findAll()
@@ -59,9 +56,9 @@ class DashboardController(
                 mapOf(
                     "id" to payment.id,
                     "studentName" to "${payment.student.firstName} ${payment.student.lastName}",
-                    "amount" to payment.totalAmount,
+                    "amount" to payment.amount,
                     "date" to payment.paymentDate.toString(),
-                    "status" to payment.paymentStatus
+                    "status" to if (payment.isLatePayment) "LATE" else "ON_TIME"
                 )
             }
         
@@ -86,7 +83,7 @@ class DashboardController(
                 else null
             ).filterNotNull(),
             "quickStats" to mapOf(
-                "averageClassSize" to if (totalClasses > 0) totalStudents / totalClasses else 0,
+                "averageClassSize" to if (totalClasses > 0) totalStudents / totalClasses.toDouble() else 0.0,
                 "activeStudentsPercentage" to 100, // Simplified
                 "monthlyGrowth" to "+5%" // Placeholder
             )
@@ -104,8 +101,8 @@ class DashboardController(
         
         for (i in 5 downTo 0) {
             val month = YearMonth.now().minusMonths(i.toLong())
-            val payments = paymentService.findByMonth(month.toString())
-            val revenue = payments.sumOf { it.totalAmount }
+            val payments = paymentService.findByMonth(month)
+            val revenue = payments.sumOf { it.amount }
             
             months.add(mapOf(
                 "month" to month.toString(),
@@ -119,7 +116,7 @@ class DashboardController(
             "totalRevenue" to months.sumOf { (it["revenue"] as Number).toDouble() },
             "averageMonthly" to if (months.isNotEmpty()) 
                 months.sumOf { (it["revenue"] as Number).toDouble() } / months.size 
-                else 0
+                else 0.0
         )
     }
 
@@ -129,29 +126,32 @@ class DashboardController(
         description = "Get student distribution across classes"
     )
     fun getClassDistribution(): Map<String, Any> {
-        val classes = classService.findAll()
+        val classes = danceClassService.findAll()
         
         val distribution = classes.map { danceClass ->
-            val students = classService.getClassStudents(danceClass.id!!)
+            val students = danceClassService.getClassStudents(danceClass.id!!)
+            val maxStudents = 20 // Default capacity since it's not in the entity
+            val teacher = if (danceClass.teachers.isNotEmpty()) danceClass.teachers.first() else null
+            
             mapOf(
                 "className" to danceClass.name,
                 "studentCount" to students.size,
-                "maxStudents" to danceClass.maxStudents,
-                "occupancyPercentage" to if (danceClass.maxStudents > 0) 
-                    (students.size * 100) / danceClass.maxStudents 
-                    else 0,
-                "teacher" to "${danceClass.teacher.firstName} ${danceClass.teacher.lastName}",
+                "maxStudents" to maxStudents,
+                "occupancyPercentage" to if (maxStudents > 0) 
+                    (students.size * 100.0) / maxStudents 
+                    else 0.0,
+                "teacher" to if (teacher != null) "${teacher.firstName} ${teacher.lastName}" else "Sin asignar",
                 "price" to danceClass.price
             )
         }
         
         return mapOf(
             "classes" to distribution,
-            "totalCapacity" to classes.sumOf { it.maxStudents },
+            "totalCapacity" to distribution.sumOf { (it["maxStudents"] as Number).toInt() },
             "totalEnrolled" to distribution.sumOf { (it["studentCount"] as Number).toInt() },
             "averageOccupancy" to if (distribution.isNotEmpty()) 
                 distribution.sumOf { (it["occupancyPercentage"] as Number).toDouble() } / distribution.size 
-                else 0
+                else 0.0
         )
     }
 }
