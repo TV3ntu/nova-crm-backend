@@ -1,4 +1,9 @@
 spring:
+  datasource:
+    url: jdbc:postgresql://dpg-d2btach5pdvs73d42l5g-a.oregon-postgres.render.com:5432/nova_crm_1fm2
+    username: nova_user
+    password: bv4C58Z49tyURunXdKt7tACOy6Gfk59j
+    driver-class-name: org.postgresql.Driver
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
