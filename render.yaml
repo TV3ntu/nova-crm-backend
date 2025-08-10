@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     branch: master
-    healthCheckPath: /api/auth/login
+    healthCheckPath: /health
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
