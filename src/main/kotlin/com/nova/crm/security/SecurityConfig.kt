@@ -54,6 +54,8 @@ class SecurityConfig {
                     // Public endpoints
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/h2-console/**").permitAll()
+                    // Health check endpoints
+                    .requestMatchers("/", "/health", "/api/health").permitAll()
                     // Swagger/OpenAPI documentation endpoints
                     .requestMatchers("/swagger-ui/**").permitAll()
                     .requestMatchers("/swagger-ui.html").permitAll()
