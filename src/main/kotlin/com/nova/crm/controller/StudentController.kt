@@ -12,9 +12,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.time.LocalDate
 
 @RestController
 @RequestMapping("/api/students")
@@ -206,7 +208,19 @@ class StudentController(
     )
     fun enrollStudentInClass(@Valid @RequestBody request: EnrollmentRequest): ResponseEntity<StudentResponse> {
         return try {
-            val student = studentService.enrollInClass(request.studentId, request.classId)
+            val student = if (request.enrollmentDate != null || request.notes != null) {
+                // Use enhanced enrollment with date tracking
+                studentService.enrollInClassWithDate(
+                    studentId = request.studentId,
+                    classId = request.classId,
+                    enrollmentDate = request.enrollmentDate ?: LocalDate.now(),
+                    notes = request.notes
+                )
+                studentService.findById(request.studentId)!!
+            } else {
+                // Use traditional enrollment for backward compatibility
+                studentService.enrollInClass(request.studentId, request.classId)
+            }
             ResponseEntity.ok(StudentResponse.from(student))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest().build()
@@ -267,5 +281,86 @@ class StudentController(
         } catch (e: IllegalArgumentException) {
             ResponseEntity.notFound().build()
         }
+    }
+
+    @GetMapping("/{id}/enrollments")
+    @Operation(
+        summary = "Get student's enrollment details",
+        description = "Retrieve detailed enrollment information including dates for a specific student"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Student enrollments retrieved successfully",
+                content = [Content(schema = Schema(implementation = StudentWithEnrollmentsResponse::class))]
+            ),
+            ApiResponse(responseCode = "404", description = "Student not found")
+        ]
+    )
+    fun getStudentEnrollments(
+        @Parameter(description = "Student ID", example = "1")
+        @PathVariable id: Long
+    ): ResponseEntity<StudentWithEnrollmentsResponse> {
+        return try {
+            val student = studentService.findById(id) ?: return ResponseEntity.notFound().build()
+            val enrollments = studentService.getStudentEnrollments(id)
+            val response = StudentWithEnrollmentsResponse.from(student, enrollments)
+            ResponseEntity.ok(response)
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.notFound().build()
+        }
+    }
+
+    @GetMapping("/{studentId}/enrollment/{classId}")
+    @Operation(
+        summary = "Get specific enrollment details",
+        description = "Get enrollment details for a specific student-class combination"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Enrollment details retrieved successfully",
+                content = [Content(schema = Schema(implementation = StudentEnrollmentResponse::class))]
+            ),
+            ApiResponse(responseCode = "404", description = "Enrollment not found")
+        ]
+    )
+    fun getEnrollmentDetails(
+        @Parameter(description = "Student ID", example = "1")
+        @PathVariable studentId: Long,
+        @Parameter(description = "Class ID", example = "1")
+        @PathVariable classId: Long
+    ): ResponseEntity<StudentEnrollmentResponse> {
+        val enrollment = studentService.getEnrollmentDetails(studentId, classId)
+            ?: return ResponseEntity.notFound().build()
+        
+        return ResponseEntity.ok(StudentEnrollmentResponse.from(enrollment))
+    }
+
+    @GetMapping("/enrollments/date-range")
+    @Operation(
+        summary = "Get enrollments by date range",
+        description = "Retrieve all enrollments within a specific date range"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Enrollments retrieved successfully",
+                content = [Content(schema = Schema(implementation = StudentEnrollmentResponse::class))]
+            )
+        ]
+    )
+    fun getEnrollmentsByDateRange(
+        @Parameter(description = "Start date", example = "2024-01-01")
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) startDate: LocalDate,
+        @Parameter(description = "End date", example = "2024-12-31")
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) endDate: LocalDate
+    ): ResponseEntity<List<StudentEnrollmentResponse>> {
+        val enrollments = studentService.getEnrollmentsByDateRange(startDate, endDate)
+        val response = enrollments.map { StudentEnrollmentResponse.from(it) }
+        return ResponseEntity.ok(response)
     }
 }
