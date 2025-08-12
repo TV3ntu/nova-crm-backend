@@ -1,5 +1,6 @@
 package com.nova.crm.entity
 
+import com.nova.crm.entity.PaymentMethod
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
@@ -36,6 +37,10 @@ data class Payment(
 
     @Column(nullable = false)
     val isLatePayment: Boolean = false,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val paymentMethod: PaymentMethod = PaymentMethod.EFECTIVO,
 
     val notes: String? = null
 ) {

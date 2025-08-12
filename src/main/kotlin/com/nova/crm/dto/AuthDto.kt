@@ -38,5 +38,41 @@ data class ErrorResponse(
     val status: Int,
     
     @Schema(description = "Timestamp", example = "2024-02-15T10:30:00")
-    val timestamp: String = java.time.LocalDateTime.now().toString()
-)
+    val timestamp: String = java.time.LocalDateTime.now().toString(),
+    
+    @Schema(description = "Additional error details")
+    val details: Map<String, Any>? = null
+) {
+    companion object {
+        fun badRequest(message: String, details: Map<String, Any>? = null): ErrorResponse {
+            return ErrorResponse(
+                message = message,
+                status = 400,
+                details = details
+            )
+        }
+        
+        fun notFound(message: String, details: Map<String, Any>? = null): ErrorResponse {
+            return ErrorResponse(
+                message = message, 
+                status = 404,
+                details = details
+            )
+        }
+        
+        fun conflict(message: String, details: Map<String, Any>? = null): ErrorResponse {
+            return ErrorResponse(
+                message = message,
+                status = 409,
+                details = details
+            )
+        }
+        
+        fun unauthorized(message: String = "Unauthorized"): ErrorResponse {
+            return ErrorResponse(
+                message = message,
+                status = 401
+            )
+        }
+    }
+}

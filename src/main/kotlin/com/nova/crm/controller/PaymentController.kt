@@ -55,7 +55,7 @@ class PaymentController(
     }
 
     @PostMapping
-    fun registerPayment(@Valid @RequestBody request: CreatePaymentRequest): ResponseEntity<PaymentResponse> {
+    fun registerPayment(@Valid @RequestBody request: CreatePaymentRequest): ResponseEntity<*> {
         return try {
             val payment = paymentService.registerPayment(
                 studentId = request.studentId,
@@ -63,33 +63,65 @@ class PaymentController(
                 amount = request.amount,
                 paymentMonth = request.paymentMonth,
                 paymentDate = request.paymentDate,
-                notes = request.notes
+                notes = request.notes,
+                paymentMethod = request.paymentMethod
             )
             ResponseEntity.status(HttpStatus.CREATED)
                 .body(PaymentResponse.from(payment))
         } catch (e: IllegalArgumentException) {
-            ResponseEntity.badRequest().build()
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Invalid request parameters",
+                    details = mapOf(
+                        "studentId" to request.studentId,
+                        "classId" to request.classId
+                    )
+                ))
         } catch (e: IllegalStateException) {
-            ResponseEntity.badRequest().build()
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.conflict(
+                    message = e.message ?: "Payment operation conflict",
+                    details = mapOf(
+                        "studentId" to request.studentId,
+                        "classId" to request.classId,
+                        "paymentMonth" to request.paymentMonth.toString()
+                    )
+                ))
         }
     }
 
     @PostMapping("/multi-class")
-    fun registerMultiClassPayment(@Valid @RequestBody request: CreateMultiClassPaymentRequest): ResponseEntity<List<PaymentResponse>> {
+    fun registerMultiClassPayment(@Valid @RequestBody request: CreateMultiClassPaymentRequest): ResponseEntity<*> {
         return try {
             val payments = paymentService.registerMultiClassPayment(
                 studentId = request.studentId,
                 totalAmount = request.totalAmount,
                 paymentMonth = request.paymentMonth,
                 paymentDate = request.paymentDate,
+                paymentMethod = request.paymentMethod,
                 notes = request.notes
             )
             val response = payments.map { PaymentResponse.from(it) }
             ResponseEntity.status(HttpStatus.CREATED).body(response)
         } catch (e: IllegalArgumentException) {
-            ResponseEntity.badRequest().build()
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Invalid request parameters",
+                    details = mapOf(
+                        "studentId" to request.studentId,
+                        "totalAmount" to request.totalAmount
+                    )
+                ))
         } catch (e: IllegalStateException) {
-            ResponseEntity.badRequest().build()
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.conflict(
+                    message = e.message ?: "Payment operation conflict",
+                    details = mapOf(
+                        "studentId" to request.studentId,
+                        "totalAmount" to request.totalAmount,
+                        "paymentMonth" to request.paymentMonth.toString()
+                    )
+                ))
         }
     }
 

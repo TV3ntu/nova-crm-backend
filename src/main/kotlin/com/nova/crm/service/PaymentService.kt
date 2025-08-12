@@ -2,6 +2,7 @@ package com.nova.crm.service
 
 import com.nova.crm.entity.DanceClass
 import com.nova.crm.entity.Payment
+import com.nova.crm.entity.PaymentMethod
 import com.nova.crm.entity.Student
 import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
@@ -37,6 +38,7 @@ class PaymentService(
         amount: BigDecimal,
         paymentMonth: YearMonth,
         paymentDate: LocalDate = LocalDate.now(),
+        paymentMethod: PaymentMethod,
         notes: String? = null
     ): Payment {
         val student = studentRepository.findByIdOrNull(studentId)
@@ -65,6 +67,7 @@ class PaymentService(
             amount = amount,
             paymentDate = paymentDate,
             paymentMonth = paymentMonth,
+            paymentMethod = paymentMethod,
             isLatePayment = isLate,
             notes = notes
         )
@@ -77,6 +80,7 @@ class PaymentService(
         totalAmount: BigDecimal,
         paymentMonth: YearMonth,
         paymentDate: LocalDate = LocalDate.now(),
+        paymentMethod: PaymentMethod,
         notes: String? = null
     ): List<Payment> {
         val student = studentRepository.findByIdOrNull(studentId)
@@ -116,6 +120,7 @@ class PaymentService(
                 amount = danceClass.price,
                 paymentDate = paymentDate,
                 paymentMonth = paymentMonth,
+                paymentMethod = paymentMethod,
                 isLatePayment = isLate,
                 notes = notes
             )

@@ -1,6 +1,7 @@
 package com.nova.crm.dto
 
 import com.nova.crm.entity.Payment
+import com.nova.crm.entity.PaymentMethod
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import java.math.BigDecimal
@@ -22,6 +23,8 @@ data class CreatePaymentRequest(
     
     val paymentDate: LocalDate = LocalDate.now(),
     
+    val paymentMethod: PaymentMethod = PaymentMethod.EFECTIVO,
+    
     val notes: String? = null
 )
 
@@ -37,6 +40,8 @@ data class CreateMultiClassPaymentRequest(
     
     val paymentDate: LocalDate = LocalDate.now(),
     
+    val paymentMethod: PaymentMethod = PaymentMethod.EFECTIVO,
+    
     val notes: String? = null
 )
 
@@ -50,6 +55,7 @@ data class PaymentResponse(
     val paymentDate: LocalDate,
     val paymentMonth: YearMonth,
     val isLatePayment: Boolean,
+    val paymentMethod: PaymentMethod,
     val notes: String?
 ) {
     companion object {
@@ -64,6 +70,7 @@ data class PaymentResponse(
                 paymentDate = payment.paymentDate,
                 paymentMonth = payment.paymentMonth,
                 isLatePayment = payment.isLatePayment,
+                paymentMethod = payment.paymentMethod,
                 notes = payment.notes
             )
         }
