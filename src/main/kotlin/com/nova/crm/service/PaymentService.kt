@@ -4,6 +4,7 @@ import com.nova.crm.entity.DanceClass
 import com.nova.crm.entity.Payment
 import com.nova.crm.entity.PaymentMethod
 import com.nova.crm.entity.Student
+import com.nova.crm.entity.StudentEnrollment
 import com.nova.crm.exception.DanceClassNotFoundException
 import com.nova.crm.exception.DuplicatePaymentException
 import com.nova.crm.exception.InsufficientAmountException
@@ -13,6 +14,7 @@ import com.nova.crm.exception.StudentNotEnrolledInAnyClassException
 import com.nova.crm.exception.StudentNotFoundException
 import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
+import com.nova.crm.repository.StudentEnrollmentRepository
 import com.nova.crm.repository.StudentRepository
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
@@ -26,7 +28,8 @@ import java.time.YearMonth
 class PaymentService(
     private val paymentRepository: PaymentRepository,
     private val studentRepository: StudentRepository,
-    private val danceClassRepository: DanceClassRepository
+    private val danceClassRepository: DanceClassRepository,
+    private val studentEnrollmentRepository: StudentEnrollmentRepository
 ) {
 
     fun findAll(): List<Payment> = paymentRepository.findAll()
@@ -161,7 +164,19 @@ class PaymentService(
         for (student in allStudents) {
             val outstandingPayments = mutableListOf<OutstandingPayment>()
             
-            for (danceClass in student.classes) {
+            // Get active enrollments for this student
+            val activeEnrollments = studentEnrollmentRepository.findByStudentIdAndIsActive(student.id, true)
+            
+            for (enrollment in activeEnrollments) {
+                val danceClass = enrollment.danceClass
+                
+                // Check if the requested month is after or equal to the enrollment month
+                val enrollmentMonth = YearMonth.from(enrollment.enrollmentDate)
+                if (month.isBefore(enrollmentMonth)) {
+                    // Skip this class for this month since student wasn't enrolled yet
+                    continue
+                }
+                
                 val existingPayment = paymentRepository.findByStudentAndClassAndMonth(
                     student.id, danceClass.id, month
                 )
