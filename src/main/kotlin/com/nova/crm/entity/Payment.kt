@@ -39,8 +39,7 @@ data class Payment(
     val isLatePayment: Boolean = false,
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    val paymentMethod: PaymentMethod = PaymentMethod.EFECTIVO,
+    val paymentMethod: PaymentMethod? = PaymentMethod.EFECTIVO,
 
     val notes: String? = null
 ) {
