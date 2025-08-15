@@ -1,6 +1,7 @@
 package com.nova.crm.controller
 
 import com.nova.crm.dto.*
+import com.nova.crm.exception.*
 import com.nova.crm.service.PaymentService
 import jakarta.validation.Valid
 import org.springframework.format.annotation.DateTimeFormat
@@ -68,11 +69,51 @@ class PaymentController(
             )
             ResponseEntity.status(HttpStatus.CREATED)
                 .body(PaymentResponse.from(payment))
+        } catch (e: StudentNotFoundException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Estudiante no encontrado",
+                    details = mapOf(
+                        "errorType" to "STUDENT_NOT_FOUND",
+                        "studentId" to request.studentId
+                    )
+                ))
+        } catch (e: DanceClassNotFoundException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Clase no encontrada",
+                    details = mapOf(
+                        "errorType" to "CLASS_NOT_FOUND",
+                        "classId" to request.classId
+                    )
+                ))
+        } catch (e: StudentNotEnrolledException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Estudiante no inscrito en la clase",
+                    details = mapOf(
+                        "errorType" to "STUDENT_NOT_ENROLLED",
+                        "studentId" to request.studentId,
+                        "classId" to request.classId
+                    )
+                ))
+        } catch (e: DuplicatePaymentException) {
+            ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.conflict(
+                    message = e.message ?: "Ya existe un pago para este período",
+                    details = mapOf(
+                        "errorType" to "DUPLICATE_PAYMENT",
+                        "studentId" to request.studentId,
+                        "classId" to request.classId,
+                        "paymentMonth" to request.paymentMonth.toString()
+                    )
+                ))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest()
                 .body(ErrorResponse.badRequest(
-                    message = e.message ?: "Invalid request parameters",
+                    message = e.message ?: "Parámetros de solicitud inválidos",
                     details = mapOf(
+                        "errorType" to "INVALID_PARAMETERS",
                         "studentId" to request.studentId,
                         "classId" to request.classId
                     )
@@ -80,8 +121,9 @@ class PaymentController(
         } catch (e: IllegalStateException) {
             ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.conflict(
-                    message = e.message ?: "Payment operation conflict",
+                    message = e.message ?: "Conflicto en la operación de pago",
                     details = mapOf(
+                        "errorType" to "PAYMENT_CONFLICT",
                         "studentId" to request.studentId,
                         "classId" to request.classId,
                         "paymentMonth" to request.paymentMonth.toString()
@@ -101,37 +143,106 @@ class PaymentController(
                 paymentMethod = request.paymentMethod,
                 notes = request.notes
             )
-            val response = payments.map { PaymentResponse.from(it) }
-            ResponseEntity.status(HttpStatus.CREATED).body(response)
+            ResponseEntity.status(HttpStatus.CREATED)
+                .body(payments.map { PaymentResponse.from(it) })
+        } catch (e: StudentNotFoundException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Estudiante no encontrado",
+                    details = mapOf(
+                        "errorType" to "STUDENT_NOT_FOUND",
+                        "studentId" to request.studentId
+                    )
+                ))
+        } catch (e: StudentNotEnrolledInAnyClassException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Estudiante no inscrito en ninguna clase",
+                    details = mapOf(
+                        "errorType" to "STUDENT_NOT_ENROLLED_ANY_CLASS",
+                        "studentId" to request.studentId
+                    )
+                ))
+        } catch (e: InsufficientAmountException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Monto insuficiente para cubrir todas las clases",
+                    details = mapOf(
+                        "errorType" to "INSUFFICIENT_AMOUNT",
+                        "studentId" to request.studentId,
+                        "providedAmount" to request.totalAmount,
+                        "paymentMonth" to request.paymentMonth.toString()
+                    )
+                ))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest()
                 .body(ErrorResponse.badRequest(
-                    message = e.message ?: "Invalid request parameters",
+                    message = e.message ?: "Parámetros de solicitud inválidos",
                     details = mapOf(
-                        "studentId" to request.studentId,
-                        "totalAmount" to request.totalAmount
+                        "errorType" to "INVALID_PARAMETERS",
+                        "studentId" to request.studentId
                     )
                 ))
         } catch (e: IllegalStateException) {
             ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.conflict(
-                    message = e.message ?: "Payment operation conflict",
+                    message = e.message ?: "Conflicto en la operación de pago múltiple",
                     details = mapOf(
+                        "errorType" to "MULTI_PAYMENT_CONFLICT",
                         "studentId" to request.studentId,
-                        "totalAmount" to request.totalAmount,
                         "paymentMonth" to request.paymentMonth.toString()
                     )
                 ))
         }
     }
 
+    @PutMapping("/{id}")
+    fun updatePayment(
+        @PathVariable id: Long,
+        @Valid @RequestBody request: UpdatePaymentRequest
+    ): ResponseEntity<*> {
+        return try {
+            val payment = paymentService.updatePayment(
+                paymentId = id,
+                amount = request.amount,
+                paymentDate = request.paymentDate,
+                paymentMethod = request.paymentMethod,
+                notes = request.notes
+            )
+            ResponseEntity.ok(PaymentResponse.from(payment))
+        } catch (e: PaymentNotFoundException) {
+            ResponseEntity.notFound()
+                .build<Any>()
+        } catch (e: IllegalArgumentException) {
+            ResponseEntity.badRequest()
+                .body(ErrorResponse.badRequest(
+                    message = e.message ?: "Parámetros de actualización inválidos",
+                    details = mapOf(
+                        "errorType" to "INVALID_UPDATE_PARAMETERS",
+                        "paymentId" to id
+                    )
+                ))
+        }
+    }
+
     @DeleteMapping("/{id}")
-    fun deletePayment(@PathVariable id: Long): ResponseEntity<Void> {
+    fun deletePayment(@PathVariable id: Long): ResponseEntity<*> {
         return try {
             paymentService.deletePayment(id)
-            ResponseEntity.noContent().build()
-        } catch (e: IllegalArgumentException) {
-            ResponseEntity.notFound().build()
+            ResponseEntity.noContent().build<Any>()
+        } catch (e: PaymentNotFoundException) {
+            ResponseEntity.notFound()
+                .build<Any>()
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse(
+                    message = "Error interno al eliminar el pago: ${e.message}",
+                    status = 500,
+                    details = mapOf(
+                        "errorType" to "DELETE_ERROR",
+                        "paymentId" to id
+                    )
+                ))
         }
     }
 

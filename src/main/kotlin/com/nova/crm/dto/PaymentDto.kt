@@ -45,6 +45,17 @@ data class CreateMultiClassPaymentRequest(
     val notes: String? = null
 )
 
+data class UpdatePaymentRequest(
+    @field:Positive(message = "Amount must be positive")
+    val amount: BigDecimal? = null,
+    
+    val paymentDate: LocalDate? = null,
+    
+    val paymentMethod: PaymentMethod? = null,
+    
+    val notes: String? = null
+)
+
 data class PaymentResponse(
     val id: Long,
     val studentId: Long,

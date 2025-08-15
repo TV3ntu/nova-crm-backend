@@ -2,6 +2,7 @@ package com.nova.crm.service
 
 import com.nova.crm.entity.DanceClass
 import com.nova.crm.entity.Payment
+import com.nova.crm.entity.PaymentMethod
 import com.nova.crm.entity.Student
 import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
@@ -71,7 +72,8 @@ class PaymentServiceTest {
             classId = 1L,
             amount = amount,
             paymentMonth = paymentMonth,
-            paymentDate = paymentDate
+            paymentDate = paymentDate,
+            paymentMethod = PaymentMethod.EFECTIVO
         )
 
         // Then
@@ -104,7 +106,8 @@ class PaymentServiceTest {
             classId = 1L,
             amount = amount,
             paymentMonth = paymentMonth,
-            paymentDate = paymentDate
+            paymentDate = paymentDate,
+            paymentMethod = PaymentMethod.EFECTIVO
         )
 
         // Then
@@ -122,7 +125,8 @@ class PaymentServiceTest {
                 studentId = 1L,
                 classId = 1L,
                 amount = BigDecimal("5000.00"),
-                paymentMonth = YearMonth.of(2024, 2)
+                paymentMonth = YearMonth.of(2024, 2),
+                paymentMethod = PaymentMethod.EFECTIVO
             )
         }
     }
@@ -146,7 +150,8 @@ class PaymentServiceTest {
                 studentId = 2L,
                 classId = 1L,
                 amount = BigDecimal("5000.00"),
-                paymentMonth = YearMonth.of(2024, 2)
+                paymentMonth = YearMonth.of(2024, 2),
+                paymentMethod = PaymentMethod.EFECTIVO
             )
         }
     }
@@ -174,7 +179,8 @@ class PaymentServiceTest {
         val result = paymentService.registerMultiClassPayment(
             studentId = 1L,
             totalAmount = totalAmount,
-            paymentMonth = paymentMonth
+            paymentMonth = paymentMonth,
+            paymentMethod = PaymentMethod.EFECTIVO
         )
 
         // Then
@@ -199,7 +205,8 @@ class PaymentServiceTest {
             paymentService.registerMultiClassPayment(
                 studentId = 1L,
                 totalAmount = insufficientAmount,
-                paymentMonth = paymentMonth
+                paymentMonth = paymentMonth,
+                paymentMethod = PaymentMethod.EFECTIVO
             )
         }
     }
