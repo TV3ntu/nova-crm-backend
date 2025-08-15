@@ -66,7 +66,7 @@ data class PaymentResponse(
     val paymentDate: LocalDate,
     val paymentMonth: YearMonth,
     val isLatePayment: Boolean,
-    val paymentMethod: PaymentMethod,
+    val paymentMethod: PaymentMethod?,
     val notes: String?
 ) {
     companion object {
