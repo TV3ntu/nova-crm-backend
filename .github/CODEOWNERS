@@ -1,0 +1,44 @@
+# CODEOWNERS file for Nova CRM
+# This file defines who owns different parts of the codebase
+# GitHub will automatically request reviews from code owners when PRs are opened
+
+# Global ownership - all files require review from the main maintainers
+* @tventu @tv3ntu
+
+# Backend Core Components
+/src/main/kotlin/com/nova/crm/entity/ @tventu @tv3ntu
+/src/main/kotlin/com/nova/crm/repository/ @tventu @tv3ntu
+/src/main/kotlin/com/nova/crm/service/ @tventu @tv3ntu
+
+# API Controllers - Critical for API stability
+/src/main/kotlin/com/nova/crm/controller/ @tventu @tv3ntu
+
+# Security & Authentication - Requires careful review
+/src/main/kotlin/com/nova/crm/security/ @tventu @tv3ntu
+/src/main/kotlin/com/nova/crm/config/ @tventu @tv3ntu
+
+# Database Migrations & Configuration
+/src/main/resources/application*.yml @tventu @tv3ntu
+/src/main/resources/db/ @tventu @tv3ntu
+
+# Build & Deployment Configuration
+/build.gradle.kts @tventu @tv3ntu
+/gradle/ @tventu @tv3ntu
+/Dockerfile @tventu @tv3ntu
+/docker-compose*.yml @tventu @tv3ntu
+
+# CI/CD Pipeline
+/.github/ @tventu @tv3ntu
+
+# Documentation
+/README.md @tventu @tv3ntu
+/docs/ @tventu @tv3ntu
+
+# Tests - Can be reviewed by any team member but main owners should be notified
+/src/test/ @tventu @tv3ntu
+
+# Exception Handling & Error Management - Critical for API reliability
+/src/main/kotlin/com/nova/crm/exception/ @tventu @tv3ntu
+
+# DTOs - Important for API contracts
+/src/main/kotlin/com/nova/crm/dto/ @tventu @tv3ntu
