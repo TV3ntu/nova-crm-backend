@@ -19,6 +19,7 @@ class StudentServiceTest {
 
     private lateinit var studentRepository: StudentRepository
     private lateinit var danceClassRepository: DanceClassRepository
+    private lateinit var studentEnrollmentService: StudentEnrollmentService
     private lateinit var studentService: StudentService
 
     private lateinit var student: Student
@@ -28,7 +29,8 @@ class StudentServiceTest {
     fun setUp() {
         studentRepository = mockk()
         danceClassRepository = mockk()
-        studentService = StudentService(studentRepository, danceClassRepository)
+        studentEnrollmentService = mockk()
+        studentService = StudentService(studentRepository, danceClassRepository, studentEnrollmentService)
 
         student = Student(
             id = 1L,

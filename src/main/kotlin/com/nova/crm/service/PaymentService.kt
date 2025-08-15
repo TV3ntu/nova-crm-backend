@@ -2,7 +2,15 @@ package com.nova.crm.service
 
 import com.nova.crm.entity.DanceClass
 import com.nova.crm.entity.Payment
+import com.nova.crm.entity.PaymentMethod
 import com.nova.crm.entity.Student
+import com.nova.crm.exception.DanceClassNotFoundException
+import com.nova.crm.exception.DuplicatePaymentException
+import com.nova.crm.exception.InsufficientAmountException
+import com.nova.crm.exception.PaymentNotFoundException
+import com.nova.crm.exception.StudentNotEnrolledException
+import com.nova.crm.exception.StudentNotEnrolledInAnyClassException
+import com.nova.crm.exception.StudentNotFoundException
 import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
 import com.nova.crm.repository.StudentRepository
@@ -37,23 +45,29 @@ class PaymentService(
         amount: BigDecimal,
         paymentMonth: YearMonth,
         paymentDate: LocalDate = LocalDate.now(),
+        paymentMethod: PaymentMethod,
         notes: String? = null
     ): Payment {
         val student = studentRepository.findByIdOrNull(studentId)
-            ?: throw IllegalArgumentException("Student not found with id: $studentId")
+            ?: throw StudentNotFoundException(studentId)
         
         val danceClass = danceClassRepository.findByIdOrNull(classId)
-            ?: throw IllegalArgumentException("Class not found with id: $classId")
+            ?: throw DanceClassNotFoundException(classId)
 
         // Verify student is enrolled in the class
         if (!student.classes.contains(danceClass)) {
-            throw IllegalStateException("Student ${student.fullName} is not enrolled in class ${danceClass.name}")
+            throw StudentNotEnrolledException(student.fullName, danceClass.name)
         }
 
         // Check if payment already exists for this student, class, and month
         val existingPayment = paymentRepository.findByStudentAndClassAndMonth(studentId, classId, paymentMonth)
         if (existingPayment != null) {
-            throw IllegalStateException("Payment already exists for ${student.fullName} in ${danceClass.name} for $paymentMonth")
+            throw DuplicatePaymentException(
+                student.fullName, 
+                danceClass.name, 
+                paymentMonth.toString(), 
+                existingPayment.id
+            )
         }
 
         // Determine if payment is late
@@ -65,6 +79,7 @@ class PaymentService(
             amount = amount,
             paymentDate = paymentDate,
             paymentMonth = paymentMonth,
+            paymentMethod = paymentMethod,
             isLatePayment = isLate,
             notes = notes
         )
@@ -77,13 +92,14 @@ class PaymentService(
         totalAmount: BigDecimal,
         paymentMonth: YearMonth,
         paymentDate: LocalDate = LocalDate.now(),
+        paymentMethod: PaymentMethod,
         notes: String? = null
     ): List<Payment> {
         val student = studentRepository.findByIdOrNull(studentId)
-            ?: throw IllegalArgumentException("Student not found with id: $studentId")
+            ?: throw StudentNotFoundException(studentId)
 
         if (student.classes.isEmpty()) {
-            throw IllegalStateException("Student ${student.fullName} is not enrolled in any classes")
+            throw StudentNotEnrolledInAnyClassException(student.fullName)
         }
 
         // Get classes that don't have payments for this month
@@ -92,7 +108,7 @@ class PaymentService(
         }
 
         if (unpaidClasses.isEmpty()) {
-            throw IllegalStateException("All classes for ${student.fullName} are already paid for $paymentMonth")
+            throw IllegalStateException("Todas las clases del estudiante ${student.fullName} ya tienen pagos registrados para $paymentMonth")
         }
 
         // Calculate total expected amount
@@ -100,8 +116,9 @@ class PaymentService(
         
         // Validate that the payment amount covers all classes
         if (totalAmount < totalExpectedAmount) {
-            throw IllegalArgumentException(
-                "Payment amount $totalAmount is insufficient. Expected: $totalExpectedAmount for classes: ${unpaidClasses.map { it.name }}"
+            throw InsufficientAmountException(
+                totalExpectedAmount.toString(), 
+                totalAmount.toString()
             )
         }
 
@@ -116,6 +133,7 @@ class PaymentService(
                 amount = danceClass.price,
                 paymentDate = paymentDate,
                 paymentMonth = paymentMonth,
+                paymentMethod = paymentMethod,
                 isLatePayment = isLate,
                 notes = notes
             )
@@ -176,11 +194,38 @@ class PaymentService(
         return outstandingMap
     }
 
+    fun updatePayment(
+        paymentId: Long,
+        amount: BigDecimal? = null,
+        paymentDate: LocalDate? = null,
+        paymentMethod: PaymentMethod? = null,
+        notes: String? = null
+    ): Payment {
+        val existingPayment = paymentRepository.findByIdOrNull(paymentId)
+            ?: throw PaymentNotFoundException(paymentId)
+
+        // Create a new Payment instance with updated values
+        val updatedPayment = existingPayment.copy(
+            amount = amount ?: existingPayment.amount,
+            paymentDate = paymentDate ?: existingPayment.paymentDate,
+            paymentMethod = paymentMethod ?: existingPayment.paymentMethod,
+            notes = notes ?: existingPayment.notes,
+            // Recalculate if payment is late based on new payment date
+            isLatePayment = if (paymentDate != null) {
+                paymentDate.dayOfMonth > 10 && YearMonth.from(paymentDate) == existingPayment.paymentMonth
+            } else {
+                existingPayment.isLatePayment
+            }
+        )
+
+        return paymentRepository.save(updatedPayment)
+    }
+
     fun deletePayment(paymentId: Long) {
-        if (!paymentRepository.existsById(paymentId)) {
-            throw IllegalArgumentException("Payment not found with id: $paymentId")
-        }
-        paymentRepository.deleteById(paymentId)
+        val payment = paymentRepository.findByIdOrNull(paymentId)
+            ?: throw PaymentNotFoundException(paymentId)
+        
+        paymentRepository.delete(payment)
     }
 }
 
