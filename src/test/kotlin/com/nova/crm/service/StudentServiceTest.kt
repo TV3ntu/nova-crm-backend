@@ -1,16 +1,20 @@
 package com.nova.crm.service
 
 import com.nova.crm.entity.DanceClass
+import com.nova.crm.entity.Payment
 import com.nova.crm.entity.Student
+import com.nova.crm.entity.StudentEnrollment
 import com.nova.crm.repository.DanceClassRepository
+import com.nova.crm.repository.PaymentRepository
 import com.nova.crm.repository.StudentRepository
+import com.nova.crm.service.StudentEnrollmentService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.assertDoesNotThrow
 import org.springframework.data.repository.findByIdOrNull
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -19,6 +23,7 @@ class StudentServiceTest {
 
     private lateinit var studentRepository: StudentRepository
     private lateinit var danceClassRepository: DanceClassRepository
+    private lateinit var paymentRepository: PaymentRepository
     private lateinit var studentEnrollmentService: StudentEnrollmentService
     private lateinit var studentService: StudentService
 
@@ -29,8 +34,9 @@ class StudentServiceTest {
     fun setUp() {
         studentRepository = mockk()
         danceClassRepository = mockk()
+        paymentRepository = mockk()
         studentEnrollmentService = mockk()
-        studentService = StudentService(studentRepository, danceClassRepository, studentEnrollmentService)
+        studentService = StudentService(studentRepository, danceClassRepository, paymentRepository, studentEnrollmentService)
 
         student = Student(
             id = 1L,
@@ -50,67 +56,57 @@ class StudentServiceTest {
     }
 
     @Test
-    fun `should enroll student in class successfully`() {
+    fun `should find student by id`() {
         // Given
         every { studentRepository.findByIdOrNull(1L) } returns student
-        every { danceClassRepository.findByIdOrNull(1L) } returns danceClass
-        every { studentRepository.save(any<Student>()) } answers { firstArg() }
 
         // When
-        val result = studentService.enrollInClass(1L, 1L)
+        val result = studentService.findById(1L)
 
         // Then
         assertNotNull(result)
-        assertTrue(result.classes.contains(danceClass))
-        assertTrue(danceClass.students.contains(student))
-        
-        verify { studentRepository.save(any<Student>()) }
+        assertEquals(student.id, result?.id)
+        assertEquals(student.firstName, result?.firstName)
     }
 
     @Test
-    fun `should throw exception when enrolling student already in class`() {
+    fun `should return null when student not found`() {
         // Given
-        danceClass.addStudent(student) // Student already enrolled
-        
-        every { studentRepository.findByIdOrNull(1L) } returns student
-        every { danceClassRepository.findByIdOrNull(1L) } returns danceClass
-
-        // When & Then
-        assertThrows<IllegalStateException> {
-            studentService.enrollInClass(1L, 1L)
-        }
-    }
-
-    @Test
-    fun `should unenroll student from class successfully`() {
-        // Given
-        danceClass.addStudent(student) // Student is enrolled
-        
-        every { studentRepository.findByIdOrNull(1L) } returns student
-        every { danceClassRepository.findByIdOrNull(1L) } returns danceClass
-        every { studentRepository.save(any<Student>()) } answers { firstArg() }
+        every { studentRepository.findByIdOrNull(999L) } returns null
 
         // When
-        val result = studentService.unenrollFromClass(1L, 1L)
+        val result = studentService.findById(999L)
 
         // Then
-        assertNotNull(result)
-        assertFalse(result.classes.contains(danceClass))
-        assertFalse(danceClass.students.contains(student))
-        
-        verify { studentRepository.save(any<Student>()) }
+        assertNull(result)
     }
 
     @Test
-    fun `should throw exception when unenrolling student not in class`() {
+    fun `should delete student successfully`() {
         // Given
+        val enrollment1 = StudentEnrollment(
+            id = 1L,
+            student = student,
+            danceClass = danceClass,
+            enrollmentDate = LocalDate.of(2024, 1, 15),
+            isActive = true
+        )
+        
         every { studentRepository.findByIdOrNull(1L) } returns student
-        every { danceClassRepository.findByIdOrNull(1L) } returns danceClass
+        every { studentEnrollmentService.getStudentEnrollments(1L) } returns listOf(enrollment1)
+        every { studentEnrollmentService.unenrollStudentFromClass(1L, 1L) } returns enrollment1.copy(isActive = false)
+        every { paymentRepository.deleteByStudentId(1L) } returns Unit
+        every { studentRepository.deleteById(1L) } returns Unit
 
         // When & Then
-        assertThrows<IllegalStateException> {
-            studentService.unenrollFromClass(1L, 1L)
+        assertDoesNotThrow {
+            studentService.deleteById(1L)
         }
+
+        verify { studentEnrollmentService.getStudentEnrollments(1L) }
+        verify { studentEnrollmentService.unenrollStudentFromClass(1L, 1L) }
+        verify { paymentRepository.deleteByStudentId(1L) }
+        verify { studentRepository.deleteById(1L) }
     }
 
     @Test
@@ -138,21 +134,5 @@ class StudentServiceTest {
         // Then
         assertEquals(student, result)
         verify { studentRepository.save(student) }
-    }
-
-    @Test
-    fun `should delete student and remove from classes`() {
-        // Given
-        danceClass.addStudent(student)
-        
-        every { studentRepository.findByIdOrNull(1L) } returns student
-        every { studentRepository.deleteById(1L) } returns Unit
-
-        // When
-        studentService.deleteById(1L)
-
-        // Then
-        assertFalse(danceClass.students.contains(student))
-        verify { studentRepository.deleteById(1L) }
     }
 }

@@ -16,6 +16,7 @@ import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
 import com.nova.crm.repository.StudentEnrollmentRepository
 import com.nova.crm.repository.StudentRepository
+import com.nova.crm.service.StudentEnrollmentService
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -29,7 +30,8 @@ class PaymentService(
     private val paymentRepository: PaymentRepository,
     private val studentRepository: StudentRepository,
     private val danceClassRepository: DanceClassRepository,
-    private val studentEnrollmentRepository: StudentEnrollmentRepository
+    private val studentEnrollmentRepository: StudentEnrollmentRepository,
+    private val studentEnrollmentService: StudentEnrollmentService
 ) {
 
     fun findAll(): List<Payment> = paymentRepository.findAll()
@@ -58,7 +60,7 @@ class PaymentService(
             ?: throw DanceClassNotFoundException(classId)
 
         // Verify student is enrolled in the class
-        if (!student.classes.contains(danceClass)) {
+        if (!studentEnrollmentService.isStudentEnrolled(studentId, classId)) {
             throw StudentNotEnrolledException(student.fullName, danceClass.name)
         }
 
@@ -101,14 +103,19 @@ class PaymentService(
         val student = studentRepository.findByIdOrNull(studentId)
             ?: throw StudentNotFoundException(studentId)
 
-        if (student.classes.isEmpty()) {
+        // Get active enrollments for this student
+        val activeEnrollments = studentEnrollmentService.getStudentEnrollments(studentId)
+        
+        if (activeEnrollments.isEmpty()) {
             throw StudentNotEnrolledInAnyClassException(student.fullName)
         }
 
         // Get classes that don't have payments for this month
-        val unpaidClasses = student.classes.filter { danceClass ->
-            paymentRepository.findByStudentAndClassAndMonth(studentId, danceClass.id, paymentMonth) == null
-        }
+        val unpaidClasses = activeEnrollments
+            .map { it.danceClass }
+            .filter { danceClass ->
+                paymentRepository.findByStudentAndClassAndMonth(studentId, danceClass.id, paymentMonth) == null
+            }
 
         if (unpaidClasses.isEmpty()) {
             throw IllegalStateException("Todas las clases del estudiante ${student.fullName} ya tienen pagos registrados para $paymentMonth")

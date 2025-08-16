@@ -7,6 +7,7 @@ import com.nova.crm.entity.Teacher
 import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.StudentRepository
 import com.nova.crm.repository.TeacherRepository
+import com.nova.crm.service.StudentEnrollmentService
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -17,7 +18,8 @@ import java.time.DayOfWeek
 class DanceClassService(
     private val danceClassRepository: DanceClassRepository,
     private val studentRepository: StudentRepository,
-    private val teacherRepository: TeacherRepository
+    private val teacherRepository: TeacherRepository,
+    private val studentEnrollmentService: StudentEnrollmentService
 ) {
 
     fun findAll(): List<DanceClass> = danceClassRepository.findAll()
@@ -48,15 +50,27 @@ class DanceClassService(
     fun deleteById(id: Long) {
         val danceClass = findById(id) ?: throw IllegalArgumentException("Class not found with id: $id")
         
-        // Remove all relationships before deletion
-        danceClass.students.forEach { student ->
-            student.classes.remove(danceClass)
+        try {
+            // 1. Desinscribir todos los estudiantes de la clase
+            val enrollments = studentEnrollmentService.getClassEnrollments(id)
+            enrollments.forEach { enrollment ->
+                studentEnrollmentService.unenrollStudentFromClass(enrollment.student.id, id)
+            }
+            
+            // 2. Desasignar todos los profesores de la clase
+            danceClass.teachers.forEach { teacher ->
+                teacher.classes.remove(danceClass)
+            }
+            
+            // 3. Los pagos se mantienen intactos para registro histórico
+            // (No eliminamos pagos - como solicitado por el usuario)
+            
+            // 4. Finalmente eliminar la clase
+            danceClassRepository.deleteById(id)
+            
+        } catch (e: Exception) {
+            throw IllegalStateException("Cannot delete class with id: $id. Error: ${e.message}", e)
         }
-        danceClass.teachers.forEach { teacher ->
-            teacher.classes.remove(danceClass)
-        }
-        
-        danceClassRepository.deleteById(id)
     }
 
     fun addSchedule(classId: Long, schedule: ClassSchedule): DanceClass {
@@ -84,8 +98,8 @@ class DanceClassService(
     }
 
     fun getClassStudents(classId: Long): List<Student> {
-        val danceClass = findById(classId) ?: throw IllegalArgumentException("Class not found with id: $classId")
-        return danceClass.students.toList()
+        val enrollments = studentEnrollmentService.getClassEnrollments(classId)
+        return enrollments.map { it.student }
     }
 
     fun getClassTeachers(classId: Long): List<Teacher> {

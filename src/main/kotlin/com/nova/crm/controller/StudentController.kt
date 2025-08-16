@@ -2,6 +2,7 @@ package com.nova.crm.controller
 
 import com.nova.crm.dto.*
 import com.nova.crm.entity.Student
+import com.nova.crm.service.StudentEnrollmentService
 import com.nova.crm.service.StudentService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
@@ -24,7 +25,8 @@ import java.time.LocalDate
 @Tag(name = "Students", description = "Student management endpoints")
 @SecurityRequirement(name = "bearerAuth")
 class StudentController(
-    private val studentService: StudentService
+    private val studentService: StudentService,
+    private val studentEnrollmentService: StudentEnrollmentService
 ) {
 
     @GetMapping
@@ -176,25 +178,48 @@ class StudentController(
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "204", description = "Student deleted successfully"),
-            ApiResponse(responseCode = "404", description = "Student not found")
+            ApiResponse(responseCode = "404", description = "Student not found"),
+            ApiResponse(responseCode = "409", description = "Cannot delete student with related data")
         ]
     )
     fun deleteStudent(
         @Parameter(description = "Student ID", example = "1")
         @PathVariable id: Long
-    ): ResponseEntity<Void> {
+    ): ResponseEntity<Any> {
         return try {
             studentService.deleteById(id)
             ResponseEntity.noContent().build()
         } catch (e: IllegalArgumentException) {
             ResponseEntity.notFound().build()
+        } catch (e: IllegalStateException) {
+            // Handle deletion conflicts (student has related data)
+            val errorResponse = ErrorResponse.conflict(
+                message = "No se puede eliminar el estudiante",
+                details = mapOf(
+                    "errorType" to "STUDENT_HAS_RELATED_DATA",
+                    "studentId" to id,
+                    "reason" to (e.message ?: "El estudiante tiene datos relacionados que impiden su eliminación")
+                )
+            )
+            ResponseEntity.status(409).body(errorResponse)
+        } catch (e: Exception) {
+            // Handle any other unexpected errors
+            val errorResponse = ErrorResponse.badRequest(
+                message = "Error interno del servidor al eliminar estudiante",
+                details = mapOf(
+                    "errorType" to "INTERNAL_SERVER_ERROR",
+                    "studentId" to id,
+                    "error" to (e.message ?: "Error desconocido")
+                )
+            )
+            ResponseEntity.status(500).body(errorResponse)
         }
     }
 
     @PostMapping("/enroll")
     @Operation(
         summary = "Enroll student in class",
-        description = "Enroll a student in a specific dance class"
+        description = "Enroll a student in a specific dance class with enrollment date tracking"
     )
     @ApiResponses(
         value = [
@@ -208,19 +233,13 @@ class StudentController(
     )
     fun enrollStudentInClass(@Valid @RequestBody request: EnrollmentRequest): ResponseEntity<StudentResponse> {
         return try {
-            val student = if (request.enrollmentDate != null || request.notes != null) {
-                // Use enhanced enrollment with date tracking
-                studentService.enrollInClassWithDate(
-                    studentId = request.studentId,
-                    classId = request.classId,
-                    enrollmentDate = request.enrollmentDate ?: LocalDate.now(),
-                    notes = request.notes
-                )
-                studentService.findById(request.studentId)!!
-            } else {
-                // Use traditional enrollment for backward compatibility
-                studentService.enrollInClass(request.studentId, request.classId)
-            }
+            studentEnrollmentService.enrollStudentInClass(
+                studentId = request.studentId,
+                classId = request.classId,
+                enrollmentDate = request.enrollmentDate, // Can be null, service will use LocalDate.now()
+                notes = request.notes
+            )
+            val student = studentService.findById(request.studentId)!!
             ResponseEntity.ok(StudentResponse.from(student))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest().build()
@@ -232,7 +251,7 @@ class StudentController(
     @DeleteMapping("/unenroll")
     @Operation(
         summary = "Unenroll student from class",
-        description = "Remove a student from a specific dance class"
+        description = "Remove a student from a specific dance class using enrollment system"
     )
     @ApiResponses(
         value = [
@@ -246,7 +265,9 @@ class StudentController(
     )
     fun unenrollStudentFromClass(@Valid @RequestBody request: EnrollmentRequest): ResponseEntity<StudentResponse> {
         return try {
-            val student = studentService.unenrollFromClass(request.studentId, request.classId)
+            // Use StudentEnrollmentService to unenroll student
+            studentEnrollmentService.unenrollStudentFromClass(request.studentId, request.classId)
+            val student = studentService.findById(request.studentId)!!
             ResponseEntity.ok(StudentResponse.from(student))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest().build()
@@ -275,7 +296,8 @@ class StudentController(
         @PathVariable id: Long
     ): ResponseEntity<List<DanceClassResponse>> {
         return try {
-            val classes = studentService.getStudentClasses(id)
+            val enrollments = studentEnrollmentService.getStudentEnrollments(id)
+            val classes = enrollments.map { it.danceClass }
             val response = classes.map { DanceClassResponse.from(it) }
             ResponseEntity.ok(response)
         } catch (e: IllegalArgumentException) {

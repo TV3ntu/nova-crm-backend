@@ -56,8 +56,7 @@ data class DanceClassResponse(
     val price: BigDecimal,
     val durationHours: Double,
     val schedules: List<ClassScheduleDto>,
-    val teacherIds: List<Long>,
-    val studentIds: List<Long>
+    val teacherIds: List<Long>
 ) {
     companion object {
         fun from(danceClass: DanceClass): DanceClassResponse {
@@ -68,8 +67,7 @@ data class DanceClassResponse(
                 price = danceClass.price,
                 durationHours = danceClass.durationHours,
                 schedules = danceClass.schedules.map { ClassScheduleDto.from(it) },
-                teacherIds = danceClass.teachers.map { it.id },
-                studentIds = danceClass.students.map { it.id }
+                teacherIds = danceClass.teachers.map { it.id }
             )
         }
     }

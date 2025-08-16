@@ -4,6 +4,7 @@ import com.nova.crm.entity.DanceClass
 import com.nova.crm.entity.Student
 import com.nova.crm.entity.StudentEnrollment
 import com.nova.crm.repository.DanceClassRepository
+import com.nova.crm.repository.PaymentRepository
 import com.nova.crm.repository.StudentRepository
 import com.nova.crm.service.StudentEnrollmentService
 import org.springframework.data.repository.findByIdOrNull
@@ -17,6 +18,7 @@ import java.time.YearMonth
 class StudentService(
     private val studentRepository: StudentRepository,
     private val danceClassRepository: DanceClassRepository,
+    private val paymentRepository: PaymentRepository,
     private val studentEnrollmentService: StudentEnrollmentService
 ) {
 
@@ -39,39 +41,24 @@ class StudentService(
     fun deleteById(id: Long) {
         val student = findById(id) ?: throw IllegalArgumentException("Student not found with id: $id")
         
-        // Remove student from all classes before deletion
-        student.classes.forEach { danceClass ->
-            danceClass.removeStudent(student)
+        try {
+            // 1. Deactivate all enrollments in StudentEnrollment table
+            val enrollments = studentEnrollmentService.getStudentEnrollments(id)
+            enrollments.forEach { enrollment ->
+                if (enrollment.id > 0) { // Only deactivate real enrollments, not temporary ones
+                    studentEnrollmentService.unenrollStudentFromClass(id, enrollment.danceClass.id)
+                }
+            }
+            
+            // 2. Delete all payments for this student
+            paymentRepository.deleteByStudentId(id)
+            
+            // 3. Finally delete the student
+            studentRepository.deleteById(id)
+            
+        } catch (e: Exception) {
+            throw IllegalStateException("Cannot delete student with id: $id. Error: ${e.message}", e)
         }
-        
-        studentRepository.deleteById(id)
-    }
-
-    fun enrollInClass(studentId: Long, classId: Long): Student {
-        val student = findById(studentId) ?: throw IllegalArgumentException("Student not found with id: $studentId")
-        val danceClass = danceClassRepository.findByIdOrNull(classId) 
-            ?: throw IllegalArgumentException("Class not found with id: $classId")
-
-        // Check if student is already enrolled
-        if (student.classes.contains(danceClass)) {
-            throw IllegalStateException("Student is already enrolled in this class")
-        }
-
-        danceClass.addStudent(student)
-        return studentRepository.save(student)
-    }
-
-    fun unenrollFromClass(studentId: Long, classId: Long): Student {
-        val student = findById(studentId) ?: throw IllegalArgumentException("Student not found with id: $studentId")
-        val danceClass = danceClassRepository.findByIdOrNull(classId) 
-            ?: throw IllegalArgumentException("Class not found with id: $classId")
-
-        if (!student.classes.contains(danceClass)) {
-            throw IllegalStateException("Student is not enrolled in this class")
-        }
-
-        danceClass.removeStudent(student)
-        return studentRepository.save(student)
     }
 
     fun findStudentsWithoutPaymentForMonth(month: YearMonth): List<Student> {
@@ -80,11 +67,6 @@ class StudentService(
 
     fun findStudentsWithoutPaymentForClassAndMonth(classId: Long, month: YearMonth): List<Student> {
         return studentRepository.findStudentsWithoutPaymentForClassAndMonth(classId, month)
-    }
-
-    fun getStudentClasses(studentId: Long): List<DanceClass> {
-        val student = findById(studentId) ?: throw IllegalArgumentException("Student not found with id: $studentId")
-        return student.classes.toList()
     }
 
     // NEW METHODS: Enhanced enrollment functionality with dates
