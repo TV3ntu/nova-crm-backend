@@ -48,6 +48,9 @@ interface PaymentRepository : JpaRepository<Payment, Long> {
         @Param("month") month: YearMonth
     ): Payment?
     
+    // Delete all payments for a student (for cascade deletion)
+    fun deleteByStudentId(studentId: Long)
+    
     @Query("""
         SELECT p FROM Payment p 
         WHERE p.isLatePayment = true 

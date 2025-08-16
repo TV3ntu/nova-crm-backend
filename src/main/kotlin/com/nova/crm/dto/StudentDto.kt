@@ -80,10 +80,7 @@ data class StudentResponse(
     val address: String?,
     
     @Schema(description = "Student's birth date", example = "2005-03-15")
-    val birthDate: LocalDate?,
-    
-    @Schema(description = "List of class IDs the student is enrolled in", example = "[1, 2]")
-    val classIds: List<Long>
+    val birthDate: LocalDate?
 ) {
     companion object {
         fun from(student: Student): StudentResponse {
@@ -95,8 +92,7 @@ data class StudentResponse(
                 phone = student.phone,
                 email = student.email,
                 address = student.address,
-                birthDate = student.birthDate,
-                classIds = student.classes.map { it.id }
+                birthDate = student.birthDate
             )
         }
     }

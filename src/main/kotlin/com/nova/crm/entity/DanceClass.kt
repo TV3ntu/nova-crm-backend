@@ -39,14 +39,6 @@ data class DanceClass(
     )
     val teachers: MutableSet<Teacher> = mutableSetOf(),
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-        name = "class_students",
-        joinColumns = [JoinColumn(name = "class_id")],
-        inverseJoinColumns = [JoinColumn(name = "student_id")]
-    )
-    val students: MutableSet<Student> = mutableSetOf(),
-
     @OneToMany(mappedBy = "danceClass", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val payments: MutableList<Payment> = mutableListOf()
 ) {
@@ -58,16 +50,6 @@ data class DanceClass(
     fun removeTeacher(teacher: Teacher) {
         teachers.remove(teacher)
         teacher.classes.remove(this)
-    }
-
-    fun addStudent(student: Student) {
-        students.add(student)
-        student.classes.add(this)
-    }
-
-    fun removeStudent(student: Student) {
-        students.remove(student)
-        student.classes.remove(this)
     }
 
     override fun toString(): String {

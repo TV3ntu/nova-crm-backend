@@ -33,9 +33,6 @@ data class Student(
     @Past(message = "Birth date must be in the past")
     val birthDate: LocalDate? = null,
 
-    @ManyToMany(mappedBy = "students", fetch = FetchType.LAZY)
-    val classes: MutableSet<DanceClass> = mutableSetOf(),
-
     @OneToMany(mappedBy = "student", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val payments: MutableList<Payment> = mutableListOf()
 ) {

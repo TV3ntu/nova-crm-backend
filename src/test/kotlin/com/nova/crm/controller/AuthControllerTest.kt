@@ -1,6 +1,8 @@
 package com.nova.crm.controller
 
+import com.nova.crm.dto.ErrorResponse
 import com.nova.crm.dto.LoginRequest
+import com.nova.crm.dto.LoginResponse
 import com.nova.crm.security.CustomUserDetailsService
 import com.nova.crm.security.JwtUtil
 import io.mockk.every
@@ -41,11 +43,11 @@ class AuthControllerTest {
 
         // Then
         assertEquals(HttpStatus.OK, response.statusCode)
-        val loginResponse = response.body as Map<*, *>
-        assertEquals(expectedToken, loginResponse["token"])
-        assertEquals("Bearer", loginResponse["tokenType"])
-        assertEquals("admin", loginResponse["username"])
-        assertEquals(86400000L, loginResponse["expiresIn"])
+        val loginResponse = response.body as LoginResponse
+        assertEquals(expectedToken, loginResponse.token)
+        assertEquals("Bearer", loginResponse.tokenType)
+        assertEquals("admin", loginResponse.username)
+        assertEquals(86400000L, loginResponse.expiresIn)
     }
 
     @Test
@@ -60,9 +62,9 @@ class AuthControllerTest {
 
         // Then
         assertEquals(HttpStatus.UNAUTHORIZED, response.statusCode)
-        val errorResponse = response.body as Map<*, *>
-        assertEquals("Invalid credentials", errorResponse["message"])
-        assertEquals(401, errorResponse["status"])
+        val errorResponse = response.body as ErrorResponse
+        assertEquals("Invalid credentials", errorResponse.message)
+        assertEquals(401, errorResponse.status)
     }
 
     @Test
@@ -97,9 +99,9 @@ class AuthControllerTest {
 
         // Then
         assertEquals(HttpStatus.UNAUTHORIZED, response.statusCode)
-        val errorResponse = response.body as Map<*, *>
-        assertTrue(errorResponse["message"].toString().contains("Token validation failed"))
-        assertEquals(401, errorResponse["status"])
+        val errorResponse = response.body as ErrorResponse
+        assertTrue(errorResponse.message.contains("Token validation failed"))
+        assertEquals(401, errorResponse.status)
     }
 
     @Test
@@ -112,9 +114,9 @@ class AuthControllerTest {
 
         // Then
         assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
-        val errorResponse = response.body as Map<*, *>
-        assertEquals("Invalid Authorization header format", errorResponse["message"])
-        assertEquals(400, errorResponse["status"])
+        val errorResponse = response.body as ErrorResponse
+        assertEquals("Invalid Authorization header format", errorResponse.message)
+        assertEquals(400, errorResponse.status)
     }
 
     @Test
@@ -130,8 +132,8 @@ class AuthControllerTest {
 
         // Then
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.statusCode)
-        val errorResponse = response.body as Map<*, *>
-        assertTrue(errorResponse["message"].toString().contains("Authentication failed"))
-        assertEquals(500, errorResponse["status"])
+        val errorResponse = response.body as ErrorResponse
+        assertTrue(errorResponse.message.contains("Authentication failed"))
+        assertEquals(500, errorResponse.status)
     }
 }

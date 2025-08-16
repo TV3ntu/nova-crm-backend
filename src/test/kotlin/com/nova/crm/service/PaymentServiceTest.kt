@@ -5,10 +5,12 @@ import com.nova.crm.entity.Payment
 import com.nova.crm.entity.PaymentMethod
 import com.nova.crm.entity.Student
 import com.nova.crm.entity.StudentEnrollment
+import com.nova.crm.exception.StudentNotEnrolledException
 import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
 import com.nova.crm.repository.StudentEnrollmentRepository
 import com.nova.crm.repository.StudentRepository
+import com.nova.crm.service.StudentEnrollmentService
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -31,6 +33,7 @@ class PaymentServiceTest {
     private lateinit var studentRepository: StudentRepository
     private lateinit var danceClassRepository: DanceClassRepository
     private lateinit var studentEnrollmentRepository: StudentEnrollmentRepository
+    private lateinit var studentEnrollmentService: StudentEnrollmentService
     private lateinit var paymentService: PaymentService
 
     private lateinit var student: Student
@@ -42,7 +45,8 @@ class PaymentServiceTest {
         studentRepository = mockk()
         danceClassRepository = mockk()
         studentEnrollmentRepository = mockk()
-        paymentService = PaymentService(paymentRepository, studentRepository, danceClassRepository, studentEnrollmentRepository)
+        studentEnrollmentService = mockk()
+        paymentService = PaymentService(paymentRepository, studentRepository, danceClassRepository, studentEnrollmentRepository, studentEnrollmentService)
 
         student = Student(
             id = 1L,
@@ -53,13 +57,14 @@ class PaymentServiceTest {
 
         danceClass = DanceClass(
             id = 1L,
-            name = "Danza Clásica",
+            name = "Ballet Básico",
+            description = "Clase de ballet para principiantes",
             price = BigDecimal("5000.00"),
             durationHours = 1.5
         )
 
-        // Add student to class
-        danceClass.addStudent(student)
+        // Setup enrollment mocks
+        every { studentEnrollmentService.isStudentEnrolled(1L, 1L) } returns true
     }
 
     @Test
@@ -151,9 +156,10 @@ class PaymentServiceTest {
 
         every { studentRepository.findByIdOrNull(2L) } returns unenrolledStudent
         every { danceClassRepository.findByIdOrNull(1L) } returns danceClass
+        every { studentEnrollmentService.isStudentEnrolled(2L, 1L) } returns false
 
         // When & Then
-        assertThrows<IllegalStateException> {
+        assertThrows<StudentNotEnrolledException> {
             paymentService.registerPayment(
                 studentId = 2L,
                 classId = 1L,
@@ -173,12 +179,28 @@ class PaymentServiceTest {
             price = BigDecimal("3000.00"),
             durationHours = 1.0
         )
-        danceClass2.addStudent(student)
+        
+        val enrollment1 = StudentEnrollment(
+            id = 1L,
+            student = student,
+            danceClass = danceClass,
+            enrollmentDate = LocalDate.of(2024, 1, 15),
+            isActive = true
+        )
+        
+        val enrollment2 = StudentEnrollment(
+            id = 2L,
+            student = student,
+            danceClass = danceClass2,
+            enrollmentDate = LocalDate.of(2024, 1, 20),
+            isActive = true
+        )
 
         val paymentMonth = YearMonth.of(2024, 2)
         val totalAmount = BigDecimal("8000.00") // 5000 + 3000
 
         every { studentRepository.findByIdOrNull(1L) } returns student
+        every { studentEnrollmentService.getStudentEnrollments(1L) } returns listOf(enrollment1, enrollment2)
         every { paymentRepository.findByStudentAndClassAndMonth(1L, 1L, paymentMonth) } returns null
         every { paymentRepository.findByStudentAndClassAndMonth(1L, 2L, paymentMonth) } returns null
         every { paymentRepository.saveAll(any<List<Payment>>()) } answers { firstArg() }
@@ -202,10 +224,19 @@ class PaymentServiceTest {
     @Test
     fun `should throw exception when multi-class payment amount is insufficient`() {
         // Given
+        val enrollment1 = StudentEnrollment(
+            id = 1L,
+            student = student,
+            danceClass = danceClass,
+            enrollmentDate = LocalDate.of(2024, 1, 15),
+            isActive = true
+        )
+        
         val paymentMonth = YearMonth.of(2024, 2)
         val insufficientAmount = BigDecimal("3000.00") // Less than class price of 5000
 
         every { studentRepository.findByIdOrNull(1L) } returns student
+        every { studentEnrollmentService.getStudentEnrollments(1L) } returns listOf(enrollment1)
         every { paymentRepository.findByStudentAndClassAndMonth(1L, 1L, paymentMonth) } returns null
 
         // When & Then
@@ -419,5 +450,84 @@ class PaymentServiceTest {
         assertEquals(1, studentOutstanding!!.size, "Should only have Ballet outstanding (Jazz not enrolled yet)")
         assertEquals(balletClass.name, studentOutstanding[0].danceClass.name, "Should be Ballet class only")
         assertEquals(balletClass.price, studentOutstanding[0].expectedAmount)
+    }
+
+    @Test
+    fun `should show class as outstanding after payment deletion`() {
+        // Given
+        val month = YearMonth.of(2024, 3)
+        val student = Student(
+            id = 1L,
+            firstName = "Ana",
+            lastName = "López",
+            phone = "987654321"
+        )
+        
+        val enrollment = StudentEnrollment(
+            id = 1L,
+            student = student,
+            danceClass = danceClass,
+            enrollmentDate = LocalDate.of(2024, 2, 1), // Enrolled in February
+            isActive = true,
+            notes = null
+        )
+
+        every { studentRepository.findAll() } returns listOf(student)
+        every { studentEnrollmentRepository.findByStudentIdAndIsActive(1L, true) } returns listOf(enrollment)
+        // Simulate that payment was deleted - no payment found for March
+        every { paymentRepository.findByStudentAndClassAndMonth(1L, 1L, month) } returns null
+
+        // When
+        val result = paymentService.calculateOutstandingPayments(month)
+
+        // Then
+        assertEquals(1, result.size)
+        assertTrue(result.containsKey(student))
+        val outstandingPayments = result[student]!!
+        assertEquals(1, outstandingPayments.size)
+        assertEquals(danceClass, outstandingPayments[0].danceClass)
+        assertEquals(BigDecimal("5000.00"), outstandingPayments[0].expectedAmount)
+        assertFalse(outstandingPayments[0].isLate) // March is not late yet
+    }
+
+    @Test
+    fun `should show payment as outstanding for July 2025 after deletion`() {
+        // Given - Exact scenario from production
+        val july2025 = YearMonth.of(2025, 7)
+        val student = Student(
+            id = 1L,
+            firstName = "Estudiante",
+            lastName = "Prueba",
+            phone = "123456789"
+        )
+        
+        // Student enrolled before July 2025 (let's say in January 2025)
+        val enrollment = StudentEnrollment(
+            id = 1L,
+            student = student,
+            danceClass = danceClass,
+            enrollmentDate = LocalDate.of(2025, 1, 15), // Enrolled in January 2025
+            isActive = true,
+            notes = null
+        )
+
+        every { studentRepository.findAll() } returns listOf(student)
+        every { studentEnrollmentRepository.findByStudentIdAndIsActive(1L, true) } returns listOf(enrollment)
+        // Payment was deleted - no payment found for July 2025
+        every { paymentRepository.findByStudentAndClassAndMonth(1L, 1L, july2025) } returns null
+
+        // When
+        val result = paymentService.calculateOutstandingPayments(july2025)
+
+        // Then
+        assertEquals(1, result.size, "Should have 1 student with outstanding payments")
+        assertTrue(result.containsKey(student), "Student should be in outstanding payments")
+        val outstandingPayments = result[student]!!
+        assertEquals(1, outstandingPayments.size, "Student should have 1 outstanding payment")
+        assertEquals(danceClass, outstandingPayments[0].danceClass, "Should be the correct dance class")
+        assertEquals(BigDecimal("5000.00"), outstandingPayments[0].expectedAmount, "Should have expected amount")
+        
+        // July 2025 - assuming current date logic, this might be late
+        // The isLate calculation depends on current date vs requested month
     }
 }

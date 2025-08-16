@@ -20,13 +20,12 @@ class StudentEnrollmentService(
 ) {
 
     /**
-     * Enroll a student in a class with enrollment date tracking.
-     * This method maintains compatibility with existing enrollment logic.
+     * Enroll a student in a class with enrollment date tracking
      */
     fun enrollStudentInClass(
         studentId: Long, 
         classId: Long, 
-        enrollmentDate: LocalDate = LocalDate.now(),
+        enrollmentDate: LocalDate? = null,
         notes: String? = null
     ): StudentEnrollment {
         val student = studentRepository.findByIdOrNull(studentId)
@@ -41,20 +40,19 @@ class StudentEnrollmentService(
             throw IllegalStateException("Student is already enrolled in this class")
         }
 
+        // Use current date if enrollmentDate is not provided
+        val effectiveEnrollmentDate = enrollmentDate ?: LocalDate.now()
+
         // Create new enrollment
         val enrollment = StudentEnrollment(
             student = student,
             danceClass = danceClass,
-            enrollmentDate = enrollmentDate,
+            enrollmentDate = effectiveEnrollmentDate,
             notes = notes,
             isActive = true
         )
 
         val savedEnrollment = studentEnrollmentRepository.save(enrollment)
-
-        // Maintain existing Many-to-Many relationship for backward compatibility
-        danceClass.addStudent(student)
-        studentRepository.save(student)
 
         return savedEnrollment
     }
@@ -76,10 +74,6 @@ class StudentEnrollmentService(
         // Deactivate enrollment instead of deleting (preserve history)
         val deactivatedEnrollment = enrollment.copy(isActive = false)
         val savedEnrollment = studentEnrollmentRepository.save(deactivatedEnrollment)
-
-        // Remove from existing Many-to-Many relationship for backward compatibility
-        danceClass.removeStudent(student)
-        studentRepository.save(student)
 
         return savedEnrollment
     }
@@ -130,33 +124,18 @@ class StudentEnrollmentService(
      * Check if a student is enrolled in a class
      */
     fun isStudentEnrolled(studentId: Long, classId: Long): Boolean {
-        return studentEnrollmentRepository.findActiveEnrollment(studentId, classId) != null
+        val enrollment = studentEnrollmentRepository.findActiveEnrollment(studentId, classId)
+        return enrollment != null
     }
 
     /**
-     * Migrate existing enrollments from the Many-to-Many relationship to StudentEnrollment table.
-     * This should be called once during deployment to preserve existing data.
+     * Unenroll a student from all classes by deactivating all their enrollments
      */
-    fun migrateExistingEnrollments() {
-        val students = studentRepository.findAll()
-        
-        students.forEach { student ->
-            student.classes.forEach { danceClass ->
-                // Check if enrollment already exists
-                val existingEnrollment = studentEnrollmentRepository.findActiveEnrollment(student.id, danceClass.id)
-                
-                if (existingEnrollment == null) {
-                    // Create enrollment with current date (we don't have historical data)
-                    val enrollment = StudentEnrollment(
-                        student = student,
-                        danceClass = danceClass,
-                        enrollmentDate = LocalDate.now(),
-                        notes = "Migrated from existing enrollment",
-                        isActive = true
-                    )
-                    studentEnrollmentRepository.save(enrollment)
-                }
-            }
+    fun unenrollStudentFromAllClasses(studentId: Long) {
+        val activeEnrollments = studentEnrollmentRepository.findByStudentIdAndIsActive(studentId, true)
+        activeEnrollments.forEach { enrollment ->
+            val deactivatedEnrollment = enrollment.copy(isActive = false)
+            studentEnrollmentRepository.save(deactivatedEnrollment)
         }
     }
 }

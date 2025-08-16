@@ -3,6 +3,9 @@ package com.nova.crm.controller
 import com.nova.crm.dto.*
 import com.nova.crm.entity.DanceClass
 import com.nova.crm.service.DanceClassService
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -97,12 +100,45 @@ class DanceClassController(
     }
 
     @DeleteMapping("/{id}")
-    fun deleteClass(@PathVariable id: Long): ResponseEntity<Void> {
+    @Operation(
+        summary = "Delete dance class",
+        description = "Remove a dance class from the system, unenrolling all students and unassigning teachers"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "Class deleted successfully"),
+            ApiResponse(responseCode = "404", description = "Class not found"),
+            ApiResponse(responseCode = "409", description = "Cannot delete class with related data")
+        ]
+    )
+    fun deleteClass(@PathVariable id: Long): ResponseEntity<Any> {
         return try {
             danceClassService.deleteById(id)
             ResponseEntity.noContent().build()
         } catch (e: IllegalArgumentException) {
             ResponseEntity.notFound().build()
+        } catch (e: IllegalStateException) {
+            // Handle deletion conflicts (class has related data that cannot be removed)
+            val errorResponse = ErrorResponse.conflict(
+                message = "No se puede eliminar la clase",
+                details = mapOf(
+                    "errorType" to "CLASS_HAS_RELATED_DATA",
+                    "classId" to id,
+                    "reason" to (e.message ?: "La clase tiene datos relacionados que impiden su eliminación")
+                )
+            )
+            ResponseEntity.status(409).body(errorResponse)
+        } catch (e: Exception) {
+            // Handle any other unexpected errors
+            val errorResponse = ErrorResponse.badRequest(
+                message = "Error interno del servidor al eliminar clase",
+                details = mapOf(
+                    "errorType" to "INTERNAL_SERVER_ERROR",
+                    "classId" to id,
+                    "error" to (e.message ?: "Error desconocido")
+                )
+            )
+            ResponseEntity.status(500).body(errorResponse)
         }
     }
 

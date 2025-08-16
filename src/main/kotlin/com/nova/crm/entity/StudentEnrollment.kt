@@ -24,7 +24,7 @@ data class StudentEnrollment(
     val danceClass: DanceClass,
 
     @Column(nullable = false)
-    val enrollmentDate: LocalDate = LocalDate.now(),
+    val enrollmentDate: LocalDate,
 
     val notes: String? = null,
 
