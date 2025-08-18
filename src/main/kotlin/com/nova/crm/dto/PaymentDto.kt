@@ -32,6 +32,9 @@ data class CreateMultiClassPaymentRequest(
     @field:NotNull(message = "Student ID is required")
     val studentId: Long,
     
+    // Optional: specify which classes to pay for. If empty, pays for all unpaid classes
+    val classIds: List<Long> = emptyList(),
+    
     @field:Positive(message = "Total amount must be positive")
     val totalAmount: BigDecimal,
     
