@@ -4,10 +4,8 @@ import com.nova.crm.entity.DanceClass
 import com.nova.crm.entity.Payment
 import com.nova.crm.entity.PaymentMethod
 import com.nova.crm.entity.Student
-import com.nova.crm.entity.StudentEnrollment
 import com.nova.crm.exception.DanceClassNotFoundException
 import com.nova.crm.exception.DuplicatePaymentException
-import com.nova.crm.exception.InsufficientAmountException
 import com.nova.crm.exception.PaymentNotFoundException
 import com.nova.crm.exception.StudentNotEnrolledException
 import com.nova.crm.exception.StudentNotEnrolledInAnyClassException
@@ -16,7 +14,6 @@ import com.nova.crm.repository.DanceClassRepository
 import com.nova.crm.repository.PaymentRepository
 import com.nova.crm.repository.StudentEnrollmentRepository
 import com.nova.crm.repository.StudentRepository
-import com.nova.crm.service.StudentEnrollmentService
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -64,16 +61,8 @@ class PaymentService(
             throw StudentNotEnrolledException(student.fullName, danceClass.name)
         }
 
-        // Check if payment already exists for this student, class, and month
-        val existingPayment = paymentRepository.findByStudentAndClassAndMonth(studentId, classId, paymentMonth)
-        if (existingPayment != null) {
-            throw DuplicatePaymentException(
-                student.fullName, 
-                danceClass.name, 
-                paymentMonth.toString(), 
-                existingPayment.id
-            )
-        }
+        // Validate enrollment date and check for duplicate payments
+        validatePaymentEligibility(studentId, classId, paymentMonth, student.fullName, danceClass.name)
 
         // Determine if payment is late
         val isLate = paymentDate.dayOfMonth > 10 && YearMonth.from(paymentDate) == paymentMonth
@@ -98,49 +87,133 @@ class PaymentService(
         paymentMonth: YearMonth,
         paymentDate: LocalDate = LocalDate.now(),
         paymentMethod: PaymentMethod,
-        notes: String? = null
+        notes: String? = null,
+        classIds: List<Long> = emptyList()
     ): List<Payment> {
         val student = studentRepository.findByIdOrNull(studentId)
             ?: throw StudentNotFoundException(studentId)
 
-        // Get active enrollments for this student
+        val targetClasses = determineTargetClasses(studentId, student.fullName, paymentMonth, classIds)
+        validateTargetClasses(targetClasses, student.fullName, paymentMonth, classIds)
+        
+        val payments = createProportionalPayments(
+            student, targetClasses, totalAmount, paymentMonth, paymentDate, paymentMethod, notes
+        )
+
+        return paymentRepository.saveAll(payments)
+    }
+
+    /**
+     * Determines which classes the student should pay for based on provided class IDs or active enrollments.
+     */
+    private fun determineTargetClasses(
+        studentId: Long,
+        studentName: String,
+        paymentMonth: YearMonth,
+        classIds: List<Long>
+    ): List<DanceClass> {
+        return if (classIds.isNotEmpty()) {
+            getSpecifiedClasses(studentId, studentName, paymentMonth, classIds)
+        } else {
+            getActiveEnrollmentClasses(studentId, studentName, paymentMonth)
+        }
+    }
+
+    /**
+     * Gets and validates specified classes for payment.
+     */
+    private fun getSpecifiedClasses(
+        studentId: Long,
+        studentName: String,
+        paymentMonth: YearMonth,
+        classIds: List<Long>
+    ): List<DanceClass> {
+        val danceClasses = mutableListOf<DanceClass>()
+        
+        for (classId in classIds) {
+            val danceClass = danceClassRepository.findByIdOrNull(classId)
+                ?: throw DanceClassNotFoundException(classId)
+            
+            if (!studentEnrollmentService.isStudentEnrolled(studentId, classId)) {
+                throw StudentNotEnrolledException(studentName, danceClass.name)
+            }
+
+            // Validate enrollment date and check for duplicate payments
+            validatePaymentEligibility(studentId, classId, paymentMonth, studentName, danceClass.name)
+
+            danceClasses.add(danceClass)
+        }
+        
+        return danceClasses
+    }
+
+    /**
+     * Gets classes from active enrollments that are eligible for payment.
+     */
+    private fun getActiveEnrollmentClasses(
+        studentId: Long,
+        studentName: String,
+        paymentMonth: YearMonth
+    ): List<DanceClass> {
         val activeEnrollments = studentEnrollmentService.getStudentEnrollments(studentId)
         
         if (activeEnrollments.isEmpty()) {
-            throw StudentNotEnrolledInAnyClassException(student.fullName)
+            throw StudentNotEnrolledInAnyClassException(studentName)
         }
 
-        // Get classes that don't have payments for this month
-        val unpaidClasses = activeEnrollments
+        // Get classes that don't have payments for this month and validate enrollment dates
+        return activeEnrollments
+            .filter { enrollment ->
+                val enrollmentMonth = YearMonth.from(enrollment.enrollmentDate)
+                !paymentMonth.isBefore(enrollmentMonth) // Only include classes where student was enrolled
+            }
             .map { it.danceClass }
             .filter { danceClass ->
                 paymentRepository.findByStudentAndClassAndMonth(studentId, danceClass.id, paymentMonth) == null
             }
+    }
 
-        if (unpaidClasses.isEmpty()) {
-            throw IllegalStateException("Todas las clases del estudiante ${student.fullName} ya tienen pagos registrados para $paymentMonth")
+    /**
+     * Validates that there are classes available for payment.
+     */
+    private fun validateTargetClasses(
+        targetClasses: List<DanceClass>,
+        studentName: String,
+        paymentMonth: YearMonth,
+        classIds: List<Long>
+    ) {
+        if (targetClasses.isEmpty()) {
+            val message = if (classIds.isNotEmpty()) {
+                "Todas las clases especificadas ya tienen pagos registrados para $paymentMonth"
+            } else {
+                "Todas las clases del estudiante $studentName ya tienen pagos registrados para $paymentMonth"
+            }
+            throw IllegalStateException(message)
         }
+    }
 
-        // Calculate total expected amount
-        val totalExpectedAmount = unpaidClasses.sumOf { it.price }
-        
-        // Validate that the payment amount covers all classes
-        if (totalAmount < totalExpectedAmount) {
-            throw InsufficientAmountException(
-                totalExpectedAmount.toString(), 
-                totalAmount.toString()
-            )
-        }
+    /**
+     * Creates proportional payments for each target class.
+     */
+    private fun createProportionalPayments(
+        student: Student,
+        targetClasses: List<DanceClass>,
+        totalAmount: BigDecimal,
+        paymentMonth: YearMonth,
+        paymentDate: LocalDate,
+        paymentMethod: PaymentMethod,
+        notes: String?
+    ): List<Payment> {
+        val discountFactor = calculateDiscountFactor(targetClasses, totalAmount)
+        val isLate = isPaymentLate(paymentDate, paymentMonth)
 
-        // Determine if payment is late
-        val isLate = paymentDate.dayOfMonth > 10 && YearMonth.from(paymentDate) == paymentMonth
-
-        // Create payments for each unpaid class
-        val payments = unpaidClasses.map { danceClass ->
+        return targetClasses.map { danceClass ->
+            val proportionalAmount = danceClass.price.multiply(discountFactor)
+            
             Payment(
                 student = student,
                 danceClass = danceClass,
-                amount = danceClass.price,
+                amount = proportionalAmount,
                 paymentDate = paymentDate,
                 paymentMonth = paymentMonth,
                 paymentMethod = paymentMethod,
@@ -148,8 +221,25 @@ class PaymentService(
                 notes = notes
             )
         }
+    }
 
-        return paymentRepository.saveAll(payments)
+    /**
+     * Calculates the discount factor based on total expected amount vs actual payment amount.
+     */
+    private fun calculateDiscountFactor(targetClasses: List<DanceClass>, totalAmount: BigDecimal): BigDecimal {
+        val totalExpectedAmount = targetClasses.sumOf { it.price }
+        return if (totalExpectedAmount > BigDecimal.ZERO) {
+            totalAmount.divide(totalExpectedAmount, 4, java.math.RoundingMode.HALF_UP)
+        } else {
+            BigDecimal.ONE
+        }
+    }
+
+    /**
+     * Determines if a payment is considered late based on payment date and month.
+     */
+    private fun isPaymentLate(paymentDate: LocalDate, paymentMonth: YearMonth): Boolean {
+        return paymentDate.dayOfMonth > 10 && YearMonth.from(paymentDate) == paymentMonth
     }
 
     fun getTotalRevenueForMonth(month: YearMonth): BigDecimal {
@@ -248,6 +338,41 @@ class PaymentService(
             ?: throw PaymentNotFoundException(paymentId)
         
         paymentRepository.delete(payment)
+    }
+
+    /**
+     * Validates that a student can make a payment for a specific class and month.
+     * Checks enrollment date and duplicate payments.
+     */
+    private fun validatePaymentEligibility(
+        studentId: Long,
+        classId: Long,
+        paymentMonth: YearMonth,
+        studentName: String,
+        className: String
+    ) {
+        // Get enrollment date and validate payment month
+        val enrollment = studentEnrollmentRepository.findByStudentIdAndDanceClassIdAndIsActive(studentId, classId, true)
+            ?: throw StudentNotEnrolledException(studentName, className)
+        
+        val enrollmentMonth = YearMonth.from(enrollment.enrollmentDate)
+        if (paymentMonth.isBefore(enrollmentMonth)) {
+            throw IllegalArgumentException(
+                "No se puede registrar un pago para ${paymentMonth} porque el estudiante ${studentName} " +
+                "se inscribió en ${className} el ${enrollment.enrollmentDate} (${enrollmentMonth})"
+            )
+        }
+
+        // Check if payment already exists for this student, class, and month
+        val existingPayment = paymentRepository.findByStudentAndClassAndMonth(studentId, classId, paymentMonth)
+        if (existingPayment != null) {
+            throw DuplicatePaymentException(
+                studentName, 
+                className, 
+                paymentMonth.toString(), 
+                existingPayment.id
+            )
+        }
     }
 }
 

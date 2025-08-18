@@ -141,7 +141,8 @@ class PaymentController(
                 paymentMonth = request.paymentMonth,
                 paymentDate = request.paymentDate,
                 paymentMethod = request.paymentMethod,
-                notes = request.notes
+                notes = request.notes,
+                classIds = request.classIds
             )
             ResponseEntity.status(HttpStatus.CREATED)
                 .body(payments.map { PaymentResponse.from(it) })
@@ -211,8 +212,15 @@ class PaymentController(
             )
             ResponseEntity.ok(PaymentResponse.from(payment))
         } catch (e: PaymentNotFoundException) {
-            ResponseEntity.notFound()
-                .build<Any>()
+            ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse(
+                    message = e.message ?: "Pago no encontrado",
+                    status = 404,
+                    details = mapOf(
+                        "errorType" to "PAYMENT_NOT_FOUND",
+                        "paymentId" to id
+                    )
+                ))
         } catch (e: IllegalArgumentException) {
             ResponseEntity.badRequest()
                 .body(ErrorResponse.badRequest(
@@ -231,8 +239,15 @@ class PaymentController(
             paymentService.deletePayment(id)
             ResponseEntity.noContent().build<Any>()
         } catch (e: PaymentNotFoundException) {
-            ResponseEntity.notFound()
-                .build<Any>()
+            ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse(
+                    message = e.message ?: "Pago no encontrado",
+                    status = 404,
+                    details = mapOf(
+                        "errorType" to "PAYMENT_NOT_FOUND",
+                        "paymentId" to id
+                    )
+                ))
         } catch (e: Exception) {
             ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse(
