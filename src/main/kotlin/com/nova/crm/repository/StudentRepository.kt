@@ -19,16 +19,16 @@ interface StudentRepository : JpaRepository<Student, Long> {
     
     @Query("""
         SELECT DISTINCT s FROM Student s 
-        JOIN s.classes c 
-        WHERE c.id = :classId
+        JOIN StudentEnrollment se ON se.student.id = s.id
+        WHERE se.danceClass.id = :classId AND se.isActive = true
     """)
     fun findByClassId(@Param("classId") classId: Long): List<Student>
     
     @Query("""
         SELECT DISTINCT s FROM Student s 
         LEFT JOIN s.payments p ON p.paymentMonth = :month
-        JOIN s.classes c
-        WHERE p.id IS NULL
+        JOIN StudentEnrollment se ON se.student.id = s.id
+        WHERE p.id IS NULL AND se.isActive = true
     """)
     fun findStudentsWithoutPaymentForMonth(@Param("month") month: YearMonth): List<Student>
     
@@ -39,9 +39,8 @@ interface StudentRepository : JpaRepository<Student, Long> {
             WHERE p.paymentMonth = :month AND p.danceClass.id = :classId
         )
         AND s.id IN (
-            SELECT DISTINCT cs.id FROM DanceClass dc 
-            JOIN dc.students cs 
-            WHERE dc.id = :classId
+            SELECT DISTINCT se.student.id FROM StudentEnrollment se
+            WHERE se.danceClass.id = :classId AND se.isActive = true
         )
     """)
     fun findStudentsWithoutPaymentForClassAndMonth(
