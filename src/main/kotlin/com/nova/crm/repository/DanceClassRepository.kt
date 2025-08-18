@@ -14,8 +14,8 @@ interface DanceClassRepository : JpaRepository<DanceClass, Long> {
     
     @Query("""
         SELECT DISTINCT c FROM DanceClass c 
-        JOIN c.students s 
-        WHERE s.id = :studentId
+        JOIN StudentEnrollment se ON se.danceClass.id = c.id
+        WHERE se.student.id = :studentId AND se.isActive = true
     """)
     fun findByStudentId(@Param("studentId") studentId: Long): List<DanceClass>
     
