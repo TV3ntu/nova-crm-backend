@@ -90,3 +90,51 @@ data class PaymentResponse(
         }
     }
 }
+
+data class StudentOutstandingPaymentsResponse(
+    val studentId: Long,
+    val studentName: String,
+    val month: YearMonth,
+    val outstandingPayments: List<OutstandingPaymentDto>,
+    val totalOutstandingAmount: BigDecimal,
+    val hasOutstandingPayments: Boolean
+) {
+    companion object {
+        fun from(
+            studentId: Long,
+            studentName: String,
+            month: YearMonth,
+            outstandingPayments: List<com.nova.crm.service.OutstandingPayment>
+        ): StudentOutstandingPaymentsResponse {
+            val outstandingDtos = outstandingPayments.map { OutstandingPaymentDto.from(it) }
+            val totalAmount = outstandingPayments.sumOf { it.expectedAmount }
+            
+            return StudentOutstandingPaymentsResponse(
+                studentId = studentId,
+                studentName = studentName,
+                month = month,
+                outstandingPayments = outstandingDtos,
+                totalOutstandingAmount = totalAmount,
+                hasOutstandingPayments = outstandingPayments.isNotEmpty()
+            )
+        }
+    }
+}
+
+data class OutstandingPaymentDto(
+    val classId: Long,
+    val className: String,
+    val expectedAmount: BigDecimal,
+    val isLate: Boolean
+) {
+    companion object {
+        fun from(payment: com.nova.crm.service.OutstandingPayment): OutstandingPaymentDto {
+            return OutstandingPaymentDto(
+                classId = payment.danceClass.id,
+                className = payment.danceClass.name,
+                expectedAmount = payment.expectedAmount,
+                isLate = payment.isLate
+            )
+        }
+    }
+}

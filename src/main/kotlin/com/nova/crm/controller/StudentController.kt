@@ -2,6 +2,7 @@ package com.nova.crm.controller
 
 import com.nova.crm.dto.*
 import com.nova.crm.entity.Student
+import com.nova.crm.service.PaymentService
 import com.nova.crm.service.StudentEnrollmentService
 import com.nova.crm.service.StudentService
 import io.swagger.v3.oas.annotations.Operation
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDate
+import java.time.YearMonth
 
 @RestController
 @RequestMapping("/api/students")
@@ -26,7 +28,8 @@ import java.time.LocalDate
 @SecurityRequirement(name = "bearerAuth")
 class StudentController(
     private val studentService: StudentService,
-    private val studentEnrollmentService: StudentEnrollmentService
+    private val studentEnrollmentService: StudentEnrollmentService,
+    private val paymentService: PaymentService
 ) {
 
     @GetMapping
@@ -307,15 +310,15 @@ class StudentController(
 
     @GetMapping("/{id}/enrollments")
     @Operation(
-        summary = "Get student's enrollment details",
-        description = "Retrieve detailed enrollment information including dates for a specific student"
+        summary = "Get student enrollments",
+        description = "Retrieve all active enrollments for a specific student with enrollment dates and notes"
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
                 description = "Student enrollments retrieved successfully",
-                content = [Content(schema = Schema(implementation = StudentWithEnrollmentsResponse::class))]
+                content = [Content(schema = Schema(implementation = StudentEnrollmentResponse::class))]
             ),
             ApiResponse(responseCode = "404", description = "Student not found")
         ]
@@ -323,14 +326,61 @@ class StudentController(
     fun getStudentEnrollments(
         @Parameter(description = "Student ID", example = "1")
         @PathVariable id: Long
-    ): ResponseEntity<StudentWithEnrollmentsResponse> {
+    ): ResponseEntity<List<StudentEnrollmentResponse>> {
+        val student = studentService.findById(id)
+            ?: return ResponseEntity.notFound().build()
+        
+        val enrollments = studentEnrollmentService.getStudentEnrollments(id)
+        val response = enrollments.map { StudentEnrollmentResponse.from(it) }
+        return ResponseEntity.ok(response)
+    }
+
+    @GetMapping("/{id}/outstanding-payments/{month}")
+    @Operation(
+        summary = "Get student outstanding payments for a specific month",
+        description = "Retrieve all classes that a student hasn't paid for in a specific month, respecting enrollment dates"
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Outstanding payments retrieved successfully",
+                content = [Content(schema = Schema(implementation = StudentOutstandingPaymentsResponse::class))]
+            ),
+            ApiResponse(responseCode = "404", description = "Student not found"),
+            ApiResponse(responseCode = "400", description = "Invalid month format")
+        ]
+    )
+    fun getStudentOutstandingPayments(
+        @Parameter(description = "Student ID", example = "1")
+        @PathVariable id: Long,
+        @Parameter(description = "Month in YYYY-MM format", example = "2025-01")
+        @PathVariable @DateTimeFormat(pattern = "yyyy-MM") month: YearMonth
+    ): ResponseEntity<Any> {
         return try {
-            val student = studentService.findById(id) ?: return ResponseEntity.notFound().build()
-            val enrollments = studentService.getStudentEnrollments(id)
-            val response = StudentWithEnrollmentsResponse.from(student, enrollments)
+            val student = studentService.findById(id)
+                ?: return ResponseEntity.notFound().build()
+            
+            val outstandingPayments = paymentService.calculateStudentOutstandingPayments(id, month)
+            val response = StudentOutstandingPaymentsResponse.from(
+                studentId = id,
+                studentName = student.fullName,
+                month = month,
+                outstandingPayments = outstandingPayments
+            )
+            
             ResponseEntity.ok(response)
-        } catch (e: IllegalArgumentException) {
-            ResponseEntity.notFound().build()
+        } catch (e: Exception) {
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.badRequest(
+                    message = "Error al obtener pagos pendientes del estudiante",
+                    details = mapOf(
+                        "errorType" to "OUTSTANDING_PAYMENTS_ERROR",
+                        "studentId" to id,
+                        "month" to month.toString(),
+                        "error" to (e.message ?: "Error desconocido")
+                    )
+                ))
         }
     }
 

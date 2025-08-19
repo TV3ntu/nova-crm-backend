@@ -306,6 +306,55 @@ class PaymentService(
         return outstandingMap
     }
 
+    /**
+     * Calculate outstanding payments for a specific student for a given month
+     */
+    fun calculateStudentOutstandingPayments(studentId: Long, month: YearMonth): List<OutstandingPayment> {
+        val student = studentRepository.findByIdOrNull(studentId)
+            ?: throw StudentNotFoundException(studentId)
+        
+        val outstandingPayments = mutableListOf<OutstandingPayment>()
+        
+        // Get active enrollments for this student
+        val activeEnrollments = studentEnrollmentRepository.findByStudentIdAndIsActive(studentId, true)
+        
+        for (enrollment in activeEnrollments) {
+            val danceClass = enrollment.danceClass
+            
+            // Check if the requested month is after or equal to the enrollment month
+            val enrollmentMonth = YearMonth.from(enrollment.enrollmentDate)
+            if (month.isBefore(enrollmentMonth)) {
+                // Skip this class for this month since student wasn't enrolled yet
+                continue
+            }
+            
+            val existingPayment = paymentRepository.findByStudentAndClassAndMonth(
+                studentId, danceClass.id, month
+            )
+            
+            if (existingPayment == null) {
+                // Calculate expected amount (with late fee if applicable)
+                val currentDate = LocalDate.now()
+                val isLate = currentDate.dayOfMonth > 10 && YearMonth.from(currentDate) == month
+                val expectedAmount = if (isLate) {
+                    danceClass.price.multiply(BigDecimal("1.15"))
+                } else {
+                    danceClass.price
+                }
+                
+                outstandingPayments.add(
+                    OutstandingPayment(
+                        danceClass = danceClass,
+                        expectedAmount = expectedAmount,
+                        isLate = isLate
+                    )
+                )
+            }
+        }
+        
+        return outstandingPayments
+    }
+
     fun updatePayment(
         paymentId: Long,
         amount: BigDecimal? = null,
@@ -358,8 +407,8 @@ class PaymentService(
         val enrollmentMonth = YearMonth.from(enrollment.enrollmentDate)
         if (paymentMonth.isBefore(enrollmentMonth)) {
             throw IllegalArgumentException(
-                "No se puede registrar un pago para ${paymentMonth} porque el estudiante ${studentName} " +
-                "se inscribió en ${className} el ${enrollment.enrollmentDate} (${enrollmentMonth})"
+                "No se puede registrar un pago para $paymentMonth porque el estudiante $studentName " +
+                "se inscribió en $className el ${enrollment.enrollmentDate} (${enrollmentMonth})"
             )
         }
 
